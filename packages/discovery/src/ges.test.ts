@@ -23,11 +23,12 @@ class MockLocalScore implements LocalScoreFunction {
   private readonly values = new Map<string, number>([
     ["0|", 0],
     ["0|1", -4],
-    ["0|2", -5],
+    ["0|2", -6],
     ["0|1,2", -20],
     ["1|", 0],
     ["1|0", -7],
-    ["1|2", 0],
+    ["1|2", -3],
+    ["1|0,2", -12],
     ["2|", 0]
   ]);
 
@@ -70,7 +71,8 @@ describe("ges", () => {
     expect(result.reverseSteps).toBeGreaterThan(0);
     expect(result.dag.edges).toEqual([
       { node1: "A", node2: "B", endpoint1: "arrow", endpoint2: "tail" },
-      { node1: "A", node2: "C", endpoint1: "arrow", endpoint2: "tail" }
+      { node1: "A", node2: "C", endpoint1: "arrow", endpoint2: "tail" },
+      { node1: "B", node2: "C", endpoint1: "arrow", endpoint2: "tail" }
     ]);
   });
 });

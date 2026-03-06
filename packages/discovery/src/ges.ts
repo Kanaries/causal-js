@@ -37,10 +37,98 @@ function totalScore(graph: CausalGraph, variableCount: number, score: GesOptions
   return total;
 }
 
+function getUndirectedNeighborIndices(graph: CausalGraph, nodeIndex: number): number[] {
+  const nodeId = graph.getNodeIdAt(nodeIndex);
+  return graph
+    .neighbors(nodeIndex)
+    .filter((candidateIndex) => graph.isUndirectedFromTo(nodeId, graph.getNodeIdAt(candidateIndex)));
+}
+
+function formsClique(graph: CausalGraph, nodeIndices: readonly number[]): boolean {
+  for (let left = 0; left < nodeIndices.length; left += 1) {
+    for (let right = left + 1; right < nodeIndices.length; right += 1) {
+      const leftId = graph.getNodeIdAt(nodeIndices[left]!);
+      const rightId = graph.getNodeIdAt(nodeIndices[right]!);
+      if (!graph.isAdjacentTo(leftId, rightId)) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+function canTraverseSemiDirected(graph: CausalGraph, fromIndex: number, toIndex: number): boolean {
+  const fromId = graph.getNodeIdAt(fromIndex);
+  const toId = graph.getNodeIdAt(toIndex);
+  return graph.isAdjacentTo(fromId, toId) && graph.getEndpoint(fromId, toId) !== "arrow";
+}
+
+function hasSemiDirectedPathAvoiding(
+  graph: CausalGraph,
+  fromIndex: number,
+  toIndex: number,
+  blockedNodes: ReadonlySet<number>
+): boolean {
+  const visited = new Set<number>([fromIndex]);
+  const queue = [fromIndex];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (current === undefined) {
+      continue;
+    }
+
+    for (const next of graph.neighbors(current)) {
+      if (blockedNodes.has(next) || !canTraverseSemiDirected(graph, current, next)) {
+        continue;
+      }
+
+      if (next === toIndex) {
+        return true;
+      }
+
+      if (!visited.has(next)) {
+        visited.add(next);
+        queue.push(next);
+      }
+    }
+  }
+
+  return false;
+}
+
+function canInsertEdge(cpdag: CausalGraph, fromIndex: number, toIndex: number): boolean {
+  const fromId = cpdag.getNodeIdAt(fromIndex);
+  const toId = cpdag.getNodeIdAt(toIndex);
+  if (cpdag.isAdjacentTo(fromId, toId)) {
+    return false;
+  }
+
+  const adjacentUndirectedNeighbors = getUndirectedNeighborIndices(cpdag, toIndex).filter(
+    (candidateIndex) => cpdag.isAdjacentTo(fromId, cpdag.getNodeIdAt(candidateIndex))
+  );
+
+  if (!formsClique(cpdag, adjacentUndirectedNeighbors)) {
+    return false;
+  }
+
+  return !hasSemiDirectedPathAvoiding(
+    cpdag,
+    toIndex,
+    fromIndex,
+    new Set(adjacentUndirectedNeighbors)
+  );
+}
+
 function canAddEdge(graph: CausalGraph, fromIndex: number, toIndex: number): boolean {
   const fromId = graph.getNodeIdAt(fromIndex);
   const toId = graph.getNodeIdAt(toIndex);
   if (graph.isAdjacentTo(fromId, toId)) {
+    return false;
+  }
+
+  if (!canInsertEdge(dagToCpdag(graph), fromIndex, toIndex)) {
     return false;
   }
 
@@ -76,8 +164,17 @@ function canReverseEdge(
     return false;
   }
 
+  if (!isCoveredEdge(graph, fromIndex, toIndex)) {
+    return false;
+  }
+
   const newParentCount = getParentIndices(graph, fromIndex).length + 1;
   if (newParentCount > maxParents) {
+    return false;
+  }
+
+  const cpdag = dagToCpdag(graph).clone().removeEdge(fromId, toId);
+  if (!canInsertEdge(cpdag, toIndex, fromIndex)) {
     return false;
   }
 
