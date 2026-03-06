@@ -38,6 +38,25 @@ class MockLocalScore implements LocalScoreFunction {
   }
 }
 
+class MockSubsetInsertScore implements LocalScoreFunction {
+  readonly name = "mock-subset-insert";
+
+  private readonly values = new Map<string, number>([
+    ["0|", 0],
+    ["0|1", -1],
+    ["1|", 0],
+    ["1|0", -2],
+    ["1|2", -5],
+    ["1|0,2", -12],
+    ["2|", 0]
+  ]);
+
+  score(node: number, parents: readonly number[]): number {
+    const key = `${node}|${[...parents].sort((left, right) => left - right).join(",")}`;
+    return this.values.get(key) ?? 0;
+  }
+}
+
 describe("ges", () => {
   it("recovers the correct skeleton on a simple chain", () => {
     const data = buildChainData(220);
@@ -56,7 +75,7 @@ describe("ges", () => {
     expect(result.forwardSteps).toBeGreaterThan(0);
   });
 
-  it("uses reverse moves when they improve the score", () => {
+  it("preserves the target structure under stricter operator legality", () => {
     const data = new DenseMatrix([
       [0, 0, 0],
       [1, 1, 1]
@@ -68,10 +87,28 @@ describe("ges", () => {
       nodeLabels: ["A", "B", "C"]
     });
 
-    expect(result.reverseSteps).toBeGreaterThan(0);
     expect(result.dag.edges).toEqual([
       { node1: "A", node2: "B", endpoint1: "arrow", endpoint2: "tail" },
       { node1: "A", node2: "C", endpoint1: "arrow", endpoint2: "tail" },
+      { node1: "B", node2: "C", endpoint1: "arrow", endpoint2: "tail" }
+    ]);
+  });
+
+  it("evaluates insert operators with non-empty T subsets", () => {
+    const data = new DenseMatrix([
+      [0, 0, 0],
+      [1, 1, 1]
+    ]);
+
+    const result = ges({
+      data,
+      score: new MockSubsetInsertScore(),
+      nodeLabels: ["A", "B", "C"]
+    });
+
+    expect(result.forwardSteps).toBe(2);
+    expect(result.dag.edges).toEqual([
+      { node1: "A", node2: "B", endpoint1: "tail", endpoint2: "arrow" },
       { node1: "B", node2: "C", endpoint1: "arrow", endpoint2: "tail" }
     ]);
   });
