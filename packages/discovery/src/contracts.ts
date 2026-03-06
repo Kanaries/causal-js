@@ -45,6 +45,7 @@ export interface GesResult {
   dag: GraphShape;
   forwardSteps: number;
   backwardSteps: number;
+  reverseSteps: number;
   score: number;
 }
 

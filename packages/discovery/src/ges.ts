@@ -64,6 +64,75 @@ function reverseEdge(graph: CausalGraph, fromIndex: number, toIndex: number): Ca
   return graph.clone().removeEdge(fromId, toId).addDirectedEdge(toId, fromId);
 }
 
+function canReverseEdge(
+  graph: CausalGraph,
+  fromIndex: number,
+  toIndex: number,
+  maxParents: number
+): boolean {
+  const fromId = graph.getNodeIdAt(fromIndex);
+  const toId = graph.getNodeIdAt(toIndex);
+  if (!graph.isParentOf(fromId, toId)) {
+    return false;
+  }
+
+  const newParentCount = getParentIndices(graph, fromIndex).length + 1;
+  if (newParentCount > maxParents) {
+    return false;
+  }
+
+  const candidate = reverseEdge(graph, fromIndex, toIndex);
+  return !candidate.hasDirectedCycle();
+}
+
+function copyDagInto(target: CausalGraph, source: CausalGraph): void {
+  target.clearEdges();
+  for (const edge of source.getDirectedEdgePairs()) {
+    target.addDirectedEdge(edge.from, edge.to);
+  }
+}
+
+function scoreDeltaForAdd(
+  graph: CausalGraph,
+  from: number,
+  to: number,
+  score: GesOptions["score"]
+): number {
+  const parents = getParentIndices(graph, to);
+  const newParents = [...parents, from].sort((left, right) => left - right);
+  return score.score(to, newParents) - score.score(to, parents);
+}
+
+function scoreDeltaForDelete(
+  graph: CausalGraph,
+  from: number,
+  to: number,
+  score: GesOptions["score"]
+): number {
+  const parents = getParentIndices(graph, to);
+  const newParents = parents.filter((parent) => parent !== from);
+  return score.score(to, newParents) - score.score(to, parents);
+}
+
+function scoreDeltaForReverse(
+  graph: CausalGraph,
+  from: number,
+  to: number,
+  score: GesOptions["score"]
+): number {
+  const fromParents = getParentIndices(graph, from);
+  const toParents = getParentIndices(graph, to);
+  const newFromParents = [...fromParents, to].sort((left, right) => left - right);
+  const newToParents = toParents.filter((parent) => parent !== from);
+
+  return (
+    score.score(from, newFromParents) +
+    score.score(to, newToParents) -
+    score.score(from, fromParents) -
+    score.score(to, toParents)
+  );
+}
+
 function dagToCpdag(graph: CausalGraph): CausalGraph {
   const seen = new Set<string>();
   const queue: CausalGraph[] = [graph.clone()];
@@ -127,10 +196,14 @@ export function ges(options: GesOptions): GesResult {
   let currentScore = totalScore(graph, variableCount, options.score);
   let forwardSteps = 0;
   let backwardSteps = 0;
+  let reverseSteps = 0;
 
   while (true) {
     let bestDelta = 0;
-    let bestMove: { from: number; to: number } | undefined;
+    let bestMove:
+      | { type: "add"; from: number; to: number }
+      | { type: "reverse"; from: number; to: number }
+      | undefined;
 
     for (let from = 0; from < variableCount; from += 1) {
       for (let to = 0; to < variableCount; to += 1) {
@@ -143,37 +216,25 @@ export function ges(options: GesOptions): GesResult {
           continue;
         }
 
-        const newParents = [...parents, from].sort((left, right) => left - right);
-        const delta = options.score.score(to, newParents) - options.score.score(to, parents);
+        const delta = scoreDeltaForAdd(graph, from, to, options.score);
         if (delta < bestDelta) {
           bestDelta = delta;
-          bestMove = { from, to };
+          bestMove = { type: "add", from, to };
         }
       }
     }
 
-    if (!bestMove) {
-      break;
-    }
-
-    graph.addDirectedEdge(graph.getNodeIdAt(bestMove.from), graph.getNodeIdAt(bestMove.to));
-    currentScore += bestDelta;
-    forwardSteps += 1;
-  }
-
-  while (true) {
-    let bestDelta = 0;
-    let bestMove: { from: number; to: number } | undefined;
-
     for (const edge of graph.getDirectedEdgePairs()) {
       const from = graph.getNodeIndex(edge.from);
       const to = graph.getNodeIndex(edge.to);
-      const parents = getParentIndices(graph, to);
-      const newParents = parents.filter((parent) => parent !== from);
-      const delta = options.score.score(to, newParents) - options.score.score(to, parents);
+      if (!canReverseEdge(graph, from, to, maxParents)) {
+        continue;
+      }
+
+      const delta = scoreDeltaForReverse(graph, from, to, options.score);
       if (delta < bestDelta) {
         bestDelta = delta;
-        bestMove = { from, to };
+        bestMove = { type: "reverse", from, to };
       }
     }
 
@@ -181,9 +242,61 @@ export function ges(options: GesOptions): GesResult {
       break;
     }
 
-    graph.removeEdge(graph.getNodeIdAt(bestMove.from), graph.getNodeIdAt(bestMove.to));
+    if (bestMove.type === "add") {
+      graph.addDirectedEdge(graph.getNodeIdAt(bestMove.from), graph.getNodeIdAt(bestMove.to));
+      forwardSteps += 1;
+    } else {
+      copyDagInto(graph, reverseEdge(graph, bestMove.from, bestMove.to));
+      reverseSteps += 1;
+    }
+
     currentScore += bestDelta;
-    backwardSteps += 1;
+  }
+
+  while (true) {
+    let bestDelta = 0;
+    let bestMove:
+      | { type: "delete"; from: number; to: number }
+      | { type: "reverse"; from: number; to: number }
+      | undefined;
+
+    for (const edge of graph.getDirectedEdgePairs()) {
+      const from = graph.getNodeIndex(edge.from);
+      const to = graph.getNodeIndex(edge.to);
+      const delta = scoreDeltaForDelete(graph, from, to, options.score);
+      if (delta < bestDelta) {
+        bestDelta = delta;
+        bestMove = { type: "delete", from, to };
+      }
+    }
+
+    for (const edge of graph.getDirectedEdgePairs()) {
+      const from = graph.getNodeIndex(edge.from);
+      const to = graph.getNodeIndex(edge.to);
+      if (!canReverseEdge(graph, from, to, maxParents)) {
+        continue;
+      }
+
+      const delta = scoreDeltaForReverse(graph, from, to, options.score);
+      if (delta < bestDelta) {
+        bestDelta = delta;
+        bestMove = { type: "reverse", from, to };
+      }
+    }
+
+    if (!bestMove) {
+      break;
+    }
+
+    if (bestMove.type === "delete") {
+      graph.removeEdge(graph.getNodeIdAt(bestMove.from), graph.getNodeIdAt(bestMove.to));
+      backwardSteps += 1;
+    } else {
+      copyDagInto(graph, reverseEdge(graph, bestMove.from, bestMove.to));
+      reverseSteps += 1;
+    }
+
+    currentScore += bestDelta;
   }
 
   return {
@@ -191,6 +304,7 @@ export function ges(options: GesOptions): GesResult {
     cpdag: dagToCpdag(graph).toShape(),
     forwardSteps,
     backwardSteps,
+    reverseSteps,
     score: currentScore
   };
 }

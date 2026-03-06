@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import type { LocalScoreFunction } from "@causal-js/core";
 import { DenseMatrix, GaussianBicScore } from "@causal-js/core";
 
 import { ges } from "./ges";
@@ -14,6 +15,26 @@ function buildChainData(sampleSize: number): DenseMatrix {
   });
 
   return new DenseMatrix(rows);
+}
+
+class MockLocalScore implements LocalScoreFunction {
+  readonly name = "mock";
+
+  private readonly values = new Map<string, number>([
+    ["0|", 0],
+    ["0|1", -4],
+    ["0|2", -5],
+    ["0|1,2", -20],
+    ["1|", 0],
+    ["1|0", -7],
+    ["1|2", 0],
+    ["2|", 0]
+  ]);
+
+  score(node: number, parents: readonly number[]): number {
+    const key = `${node}|${[...parents].sort((left, right) => left - right).join(",")}`;
+    return this.values.get(key) ?? 0;
+  }
 }
 
 describe("ges", () => {
@@ -32,5 +53,24 @@ describe("ges", () => {
       { node1: "Y", node2: "Z", endpoint1: "tail", endpoint2: "tail" }
     ]);
     expect(result.forwardSteps).toBeGreaterThan(0);
+  });
+
+  it("uses reverse moves when they improve the score", () => {
+    const data = new DenseMatrix([
+      [0, 0, 0],
+      [1, 1, 1]
+    ]);
+
+    const result = ges({
+      data,
+      score: new MockLocalScore(),
+      nodeLabels: ["A", "B", "C"]
+    });
+
+    expect(result.reverseSteps).toBeGreaterThan(0);
+    expect(result.dag.edges).toEqual([
+      { node1: "A", node2: "B", endpoint1: "arrow", endpoint2: "tail" },
+      { node1: "A", node2: "C", endpoint1: "arrow", endpoint2: "tail" }
+    ]);
   });
 });
