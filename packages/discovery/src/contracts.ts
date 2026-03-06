@@ -19,6 +19,7 @@ export interface GesOptions {
   data: NumericMatrix;
   score: LocalScoreFunction;
   nodeLabels?: readonly string[];
+  maxParents?: number;
 }
 
 export interface AlgorithmResult {
@@ -35,6 +36,16 @@ export interface PcSkeletonResult extends AlgorithmResult {
   maxDepth: number;
   sepsets: SeparationSetEntry[];
   testsRun: number;
+}
+
+export interface PcResult extends PcSkeletonResult {}
+
+export interface GesResult {
+  cpdag: GraphShape;
+  dag: GraphShape;
+  forwardSteps: number;
+  backwardSteps: number;
+  score: number;
 }
 
 export function notImplemented(name: string): never {

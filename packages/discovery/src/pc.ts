@@ -1,6 +1,6 @@
 import { CausalGraph, EDGE_ENDPOINT, type BackgroundKnowledge } from "@causal-js/core";
 
-import type { PcOptions, PcSkeletonResult, SeparationSetEntry } from "./contracts";
+import type { PcOptions, PcResult, PcSkeletonResult, SeparationSetEntry } from "./contracts";
 
 function createNodeLabels(variableCount: number, nodeLabels?: readonly string[]): string[] {
   if (!nodeLabels) {
@@ -91,6 +91,194 @@ function serializeSepsets(sepsets: Map<string, number[][]>): SeparationSetEntry[
   });
 }
 
+function materializeGraph(result: PcSkeletonResult): CausalGraph {
+  return CausalGraph.fromShape(result.graph);
+}
+
+function canOrient(
+  backgroundKnowledge: BackgroundKnowledge | undefined,
+  from: string,
+  to: string
+): boolean {
+  if (!backgroundKnowledge) {
+    return true;
+  }
+
+  if (backgroundKnowledge.isForbidden(from, to)) {
+    return false;
+  }
+
+  if (backgroundKnowledge.isRequired(to, from)) {
+    return false;
+  }
+
+  return true;
+}
+
+function buildSepsetLookup(sepsets: SeparationSetEntry[]): Map<string, number[][]> {
+  return new Map(sepsets.map((entry) => [pairKey(entry.x, entry.y), entry.conditioningSets.map((set) => [...set])]));
+}
+
+function orientUndirectedEdge(graph: CausalGraph, from: string, to: string): boolean {
+  if (!graph.isUndirectedFromTo(from, to)) {
+    return false;
+  }
+
+  graph.orientEdge(from, to);
+  return true;
+}
+
+export function orientByBackgroundKnowledge(
+  graph: CausalGraph,
+  backgroundKnowledge?: BackgroundKnowledge
+): CausalGraph {
+  if (!backgroundKnowledge) {
+    return graph;
+  }
+
+  for (const edge of graph.getEdges()) {
+    if (!graph.isUndirectedFromTo(edge.node1, edge.node2)) {
+      continue;
+    }
+
+    if (backgroundKnowledge.isForbidden(edge.node2, edge.node1)) {
+      orientUndirectedEdge(graph, edge.node1, edge.node2);
+      continue;
+    }
+
+    if (backgroundKnowledge.isForbidden(edge.node1, edge.node2)) {
+      orientUndirectedEdge(graph, edge.node2, edge.node1);
+      continue;
+    }
+
+    if (backgroundKnowledge.isRequired(edge.node2, edge.node1)) {
+      orientUndirectedEdge(graph, edge.node2, edge.node1);
+      continue;
+    }
+
+    if (backgroundKnowledge.isRequired(edge.node1, edge.node2)) {
+      orientUndirectedEdge(graph, edge.node1, edge.node2);
+    }
+  }
+
+  return graph;
+}
+
+export function orientColliders(
+  graph: CausalGraph,
+  sepsets: SeparationSetEntry[],
+  backgroundKnowledge?: BackgroundKnowledge
+): CausalGraph {
+  const sepsetLookup = buildSepsetLookup(sepsets);
+
+  for (const [x, y, z] of graph.findUnshieldedTriples()) {
+    if (x >= z) {
+      continue;
+    }
+
+    const xId = graph.getNodeIdAt(x);
+    const yId = graph.getNodeIdAt(y);
+    const zId = graph.getNodeIdAt(z);
+
+    if (
+      !canOrient(backgroundKnowledge, xId, yId) ||
+      !canOrient(backgroundKnowledge, zId, yId)
+    ) {
+      continue;
+    }
+
+    const conditioningSets = sepsetLookup.get(pairKey(x, z)) ?? [];
+    const yInSepset = conditioningSets.some((conditioningSet) => conditioningSet.includes(y));
+    if (yInSepset) {
+      continue;
+    }
+
+    if (graph.isUndirectedFromTo(xId, yId)) {
+      graph.orientEdge(xId, yId);
+    }
+
+    if (graph.isUndirectedFromTo(zId, yId)) {
+      graph.orientEdge(zId, yId);
+    }
+  }
+
+  return graph;
+}
+
+export function meekOrient(
+  graph: CausalGraph,
+  backgroundKnowledge?: BackgroundKnowledge
+): CausalGraph {
+  let changed = true;
+
+  while (changed) {
+    changed = false;
+
+    for (const [i, j, k] of graph.findUnshieldedTriples()) {
+      const iId = graph.getNodeIdAt(i);
+      const jId = graph.getNodeIdAt(j);
+      const kId = graph.getNodeIdAt(k);
+
+      if (!graph.isFullyDirected(i, j) || !graph.isUndirected(j, k)) {
+        continue;
+      }
+
+      if (!canOrient(backgroundKnowledge, jId, kId) || graph.isAncestorOf(kId, jId)) {
+        continue;
+      }
+
+      if (orientUndirectedEdge(graph, jId, kId)) {
+        changed = true;
+      }
+    }
+
+    for (const [i, j, k] of graph.findTriangles()) {
+      const iId = graph.getNodeIdAt(i);
+      const jId = graph.getNodeIdAt(j);
+      const kId = graph.getNodeIdAt(k);
+
+      if (!graph.isFullyDirected(i, j) || !graph.isFullyDirected(j, k) || !graph.isUndirected(i, k)) {
+        continue;
+      }
+
+      if (!canOrient(backgroundKnowledge, iId, kId) || graph.isAncestorOf(kId, iId)) {
+        continue;
+      }
+
+      if (orientUndirectedEdge(graph, iId, kId)) {
+        changed = true;
+      }
+    }
+
+    for (const [i, j, k, l] of graph.findKites()) {
+      const iId = graph.getNodeIdAt(i);
+      const jId = graph.getNodeIdAt(j);
+      const kId = graph.getNodeIdAt(k);
+      const lId = graph.getNodeIdAt(l);
+
+      if (
+        !graph.isUndirected(i, j) ||
+        !graph.isUndirected(i, k) ||
+        !graph.isFullyDirected(j, l) ||
+        !graph.isFullyDirected(k, l) ||
+        !graph.isUndirected(i, l)
+      ) {
+        continue;
+      }
+
+      if (!canOrient(backgroundKnowledge, iId, lId) || graph.isAncestorOf(lId, iId)) {
+        continue;
+      }
+
+      if (orientUndirectedEdge(graph, iId, lId)) {
+        changed = true;
+      }
+    }
+  }
+
+  return graph;
+}
+
 export function skeletonDiscovery(options: PcOptions): PcSkeletonResult {
   const alpha = options.alpha ?? 0.05;
   const stable = options.stable ?? true;
@@ -177,5 +365,19 @@ export function skeletonDiscovery(options: PcOptions): PcSkeletonResult {
     maxDepth: depth,
     sepsets: serializeSepsets(sepsets),
     testsRun
+  };
+}
+
+export function pc(options: PcOptions): PcResult {
+  const skeleton = skeletonDiscovery(options);
+  const graph = materializeGraph(skeleton);
+
+  orientByBackgroundKnowledge(graph, options.backgroundKnowledge);
+  orientColliders(graph, skeleton.sepsets, options.backgroundKnowledge);
+  meekOrient(graph, options.backgroundKnowledge);
+
+  return {
+    ...skeleton,
+    graph: graph.toShape()
   };
 }
