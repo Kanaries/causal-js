@@ -14,11 +14,38 @@ import {
 export * from "@causal-js/core";
 export * from "@causal-js/discovery";
 
-export const webRuntime = {
-  name: "browser",
-  supportsWebWorkers: true,
-  supportsWebGpu: false
-} as const;
+export interface WebRuntimeInfo {
+  name: "browser";
+  isBrowserLike: boolean;
+  supportsWebWorkers: boolean;
+  supportsWebGpu: boolean;
+  userAgent: string | null;
+}
+
+export interface WebRuntimeProbeInput {
+  Worker?: unknown;
+  navigator?: {
+    gpu?: unknown;
+    userAgent?: string;
+  };
+}
+
+export function detectWebRuntimeCapabilities(
+  runtime: WebRuntimeProbeInput = globalThis as WebRuntimeProbeInput
+): WebRuntimeInfo {
+  const userAgent = runtime.navigator?.userAgent ?? null;
+  const isBrowserLike = typeof userAgent === "string";
+
+  return {
+    name: "browser",
+    isBrowserLike,
+    supportsWebWorkers: typeof runtime.Worker === "function",
+    supportsWebGpu: runtime.navigator?.gpu != null,
+    userAgent
+  };
+}
+
+export const webRuntime = detectWebRuntimeCapabilities();
 
 export const webAlgorithmCatalog: AlgorithmDescriptor[] = algorithmCatalog
   .filter((descriptor) =>

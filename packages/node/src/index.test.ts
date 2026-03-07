@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  detectNodeRuntimeCapabilities,
   getNodeAlgorithmDescriptor,
   isNodeAlgorithmSupported,
   nodeAlgorithmCatalog,
@@ -9,11 +10,36 @@ import {
 } from "./index";
 
 describe("@causal-js/node", () => {
-  it("exposes explicit node runtime metadata", () => {
-    expect(nodeRuntime).toEqual({
+  it("detects actual node runtime capabilities", () => {
+    expect(
+      detectNodeRuntimeCapabilities({
+        process: { versions: { node: "20.11.1" } }
+      })
+    ).toEqual({
       name: "node",
+      isNodeLike: true,
       supportsWorkers: true,
-      supportsFileSystem: true
+      supportsFileSystem: true,
+      supportsWebGpu: false,
+      nodeVersion: "20.11.1"
+    });
+    expect(nodeRuntime.name).toBe("node");
+    expect(typeof nodeRuntime.supportsFileSystem).toBe("boolean");
+  });
+
+  it("reports optional WebGPU support when available in the host", () => {
+    expect(
+      detectNodeRuntimeCapabilities({
+        navigator: { gpu: {} },
+        process: { versions: { node: "20.11.1" } }
+      })
+    ).toEqual({
+      name: "node",
+      isNodeLike: true,
+      supportsWorkers: true,
+      supportsFileSystem: true,
+      supportsWebGpu: true,
+      nodeVersion: "20.11.1"
     });
   });
 

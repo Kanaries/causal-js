@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  detectWebRuntimeCapabilities,
   getWebAlgorithmDescriptor,
   isWebAlgorithmSupported,
   webAlgorithmCatalog,
@@ -9,11 +10,35 @@ import {
 } from "./index";
 
 describe("@causal-js/web", () => {
-  it("exposes explicit web runtime metadata", () => {
-    expect(webRuntime).toEqual({
+  it("detects actual browser runtime capabilities", () => {
+    expect(
+      detectWebRuntimeCapabilities({
+        Worker: function Worker() {},
+        navigator: { userAgent: "test-browser" }
+      })
+    ).toEqual({
       name: "browser",
+      isBrowserLike: true,
       supportsWebWorkers: true,
-      supportsWebGpu: false
+      supportsWebGpu: false,
+      userAgent: "test-browser"
+    });
+    expect(webRuntime.name).toBe("browser");
+    expect(typeof webRuntime.supportsWebWorkers).toBe("boolean");
+  });
+
+  it("detects WebGPU support when the host exposes navigator.gpu", () => {
+    expect(
+      detectWebRuntimeCapabilities({
+        Worker: function Worker() {},
+        navigator: { gpu: {}, userAgent: "test-browser" }
+      })
+    ).toEqual({
+      name: "browser",
+      isBrowserLike: true,
+      supportsWebWorkers: true,
+      supportsWebGpu: true,
+      userAgent: "test-browser"
     });
   });
 

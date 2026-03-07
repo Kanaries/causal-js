@@ -165,7 +165,13 @@ console.log(result.causalOrder);
 ### Runtime Facades
 
 ```ts
-import { DenseMatrix, FisherZTest, nodeRuntime, pc } from "@causal-js/node";
+import {
+  DenseMatrix,
+  FisherZTest,
+  detectNodeRuntimeCapabilities,
+  nodeRuntime,
+  pc
+} from "@causal-js/node";
 
 const data = new DenseMatrix(rows);
 const result = pc({
@@ -173,11 +179,18 @@ const result = pc({
   ciTest: new FisherZTest(data)
 });
 
+console.log(detectNodeRuntimeCapabilities());
 console.log(nodeRuntime.supportsFileSystem);
 ```
 
 ```ts
-import { DenseMatrix, FisherZTest, webRuntime, pc } from "@causal-js/web";
+import {
+  DenseMatrix,
+  FisherZTest,
+  detectWebRuntimeCapabilities,
+  webRuntime,
+  pc
+} from "@causal-js/web";
 
 const data = new DenseMatrix(rows);
 const result = pc({
@@ -185,6 +198,7 @@ const result = pc({
   ciTest: new FisherZTest(data)
 });
 
+console.log(detectWebRuntimeCapabilities());
 console.log(webRuntime.supportsWebWorkers);
 ```
 
