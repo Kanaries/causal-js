@@ -48,6 +48,14 @@ export const algorithmCatalog: AlgorithmDescriptor[] = [
     ]
   },
   {
+    id: "gin",
+    summary: "Hidden-causal cluster discovery for latent-variable models using kernel independence tests.",
+    availability: [
+      { runtime: "node", supported: true, capabilities: ["cpu"] },
+      { runtime: "browser", supported: true, capabilities: ["cpu"] }
+    ]
+  },
+  {
     id: "calm",
     summary: "Expected to be Node-first because of heavier numerical dependencies.",
     availability: [

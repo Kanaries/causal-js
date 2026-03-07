@@ -61,6 +61,16 @@ export interface GraspOptions {
   randomSeed?: number;
 }
 
+export type GinIndependenceTestMethod = "hsic" | "kci";
+
+export interface GinOptions {
+  data: NumericMatrix;
+  alpha?: number;
+  indepTestMethod?: GinIndependenceTestMethod;
+  nodeLabels?: readonly string[];
+  latentLabelPrefix?: string;
+}
+
 export interface AlgorithmResult {
   graph: GraphShape;
 }
@@ -109,6 +119,12 @@ export interface GraspResult {
   edgeCount: number;
   score: number;
   depth: number;
+}
+
+export interface GinResult extends AlgorithmResult {
+  causalOrder: number[][];
+  remainingClusters: number[][];
+  indepTestMethod: GinIndependenceTestMethod;
 }
 
 export function notImplemented(name: string): never {
