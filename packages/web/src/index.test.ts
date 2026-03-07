@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  createWebGpuAdapter,
+  createWebWorkerAdapter,
   detectWebRuntimeCapabilities,
+  executeWebAlgorithm,
   getWebRuntimeAdapters,
   getWebAlgorithmDescriptor,
   isWebAlgorithmSupported,
   listRunnableWebAlgorithms,
+  planWebAlgorithmExecution,
   registerWebRuntimeAdapter,
   resolveWebAlgorithmSupport,
   webAlgorithmCatalog,
@@ -129,5 +133,72 @@ describe("@causal-js/web", () => {
 
     unregister();
     expect(getWebRuntimeAdapters("pc")).toEqual([]);
+  });
+
+  it("plans a CPU fallback when browser worker execution is unavailable", () => {
+    expect(
+      planWebAlgorithmExecution("pc", {
+        name: "browser",
+        isBrowserLike: true,
+        supportsWebWorkers: false,
+        supportsWebGpu: false,
+        userAgent: "test-browser"
+      })
+    ).toMatchObject({
+      runnable: true,
+      executionMode: "cpu",
+      executionSource: "local"
+    });
+  });
+
+  it("executes through a registered worker adapter when available", async () => {
+    const unregister = registerWebRuntimeAdapter(
+      createWebWorkerAdapter("pc", async (options, runtime) => ({
+        mode: "worker",
+        options,
+        runtime
+      }))
+    );
+
+    await expect(
+      executeWebAlgorithm(
+        "pc",
+        { alpha: 0.05 },
+        {
+          name: "browser",
+          isBrowserLike: true,
+          supportsWebWorkers: true,
+          supportsWebGpu: false,
+          userAgent: "test-browser"
+        }
+      )
+    ).resolves.toMatchObject({
+      mode: "worker",
+      options: { alpha: 0.05 }
+    });
+
+    unregister();
+  });
+
+  it("prefers a WebGPU adapter when the runtime exposes WebGPU", () => {
+    const unregister = registerWebRuntimeAdapter(
+      createWebGpuAdapter("pc", async () => ({ mode: "webgpu" }))
+    );
+
+    expect(
+      planWebAlgorithmExecution("pc", {
+        name: "browser",
+        isBrowserLike: true,
+        supportsWebWorkers: true,
+        supportsWebGpu: true,
+        userAgent: "test-browser"
+      })
+    ).toMatchObject({
+      runnable: true,
+      executionMode: "webgpu",
+      executionSource: "adapter"
+    });
+
+    unregister();
   });
 });

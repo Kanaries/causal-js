@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  createNodeWorkerAdapter,
   detectNodeRuntimeCapabilities,
+  executeNodeAlgorithm,
   getNodeRuntimeAdapters,
   getNodeAlgorithmDescriptor,
   isNodeAlgorithmSupported,
@@ -9,6 +11,7 @@ import {
   nodeAlgorithmCatalog,
   nodeAlgorithms,
   nodeRuntime,
+  planNodeAlgorithmExecution,
   registerNodeRuntimeAdapter,
   resolveNodeAlgorithmSupport
 } from "./index";
@@ -133,5 +136,52 @@ describe("@causal-js/node", () => {
 
     unregister();
     expect(getNodeRuntimeAdapters("pc")).toEqual([]);
+  });
+
+  it("plans a CPU fallback when worker execution is unavailable", () => {
+    expect(
+      planNodeAlgorithmExecution("pc", {
+        name: "node",
+        isNodeLike: true,
+        supportsWorkers: false,
+        supportsFileSystem: true,
+        supportsWebGpu: false,
+        nodeVersion: "20.11.1"
+      })
+    ).toMatchObject({
+      runnable: true,
+      executionMode: "cpu",
+      executionSource: "local"
+    });
+  });
+
+  it("executes through a registered worker adapter when available", async () => {
+    const unregister = registerNodeRuntimeAdapter(
+      createNodeWorkerAdapter("pc", async (options, runtime) => ({
+        mode: "worker",
+        options,
+        runtime
+      }))
+    );
+
+    await expect(
+      executeNodeAlgorithm(
+        "pc",
+        { alpha: 0.05 },
+        {
+          name: "node",
+          isNodeLike: true,
+          supportsWorkers: true,
+          supportsFileSystem: true,
+          supportsWebGpu: false,
+          nodeVersion: "20.11.1"
+        }
+      )
+    ).resolves.toMatchObject({
+      mode: "worker",
+      options: { alpha: 0.05 }
+    });
+
+    unregister();
   });
 });
