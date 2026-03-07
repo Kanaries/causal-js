@@ -14,14 +14,6 @@ function createNodeLabels(variableCount: number, nodeLabels?: readonly string[])
   return [...nodeLabels];
 }
 
-function serializeDag(graph: CausalGraph): string {
-  return graph
-    .getDirectedEdgePairs()
-    .map((edge) => `${edge.from}->${edge.to}`)
-    .sort()
-    .join("|");
-}
-
 function getParentIndices(graph: CausalGraph, nodeIndex: number): number[] {
   return graph
     .getParentIds(graph.getNodeIdAt(nodeIndex))
@@ -46,6 +38,13 @@ function getUndirectedNeighborIndices(graph: CausalGraph, nodeIndex: number): nu
 
 function getAdjacentIndices(graph: CausalGraph, nodeIndex: number): number[] {
   return graph.neighbors(nodeIndex);
+}
+
+function getChildIndices(graph: CausalGraph, nodeIndex: number): number[] {
+  return graph
+    .getChildIds(graph.getNodeIdAt(nodeIndex))
+    .map((nodeId) => graph.getNodeIndex(nodeId))
+    .sort((left, right) => left - right);
 }
 
 function getCpdagParentIndices(graph: CausalGraph, nodeIndex: number): number[] {
@@ -154,78 +153,12 @@ function canInsertEdge(
 }
 
 function canAddEdge(
-  graph: CausalGraph,
   cpdag: CausalGraph,
   fromIndex: number,
   toIndex: number,
   subset: readonly number[]
 ): boolean {
-  const fromId = graph.getNodeIdAt(fromIndex);
-  const toId = graph.getNodeIdAt(toIndex);
-  if (graph.isAdjacentTo(fromId, toId)) {
-    return false;
-  }
-
-  if (!canInsertEdge(cpdag, fromIndex, toIndex, subset)) {
-    return false;
-  }
-
-  const candidate = applyInsert(graph, cpdag, fromIndex, toIndex, subset);
-  return !candidate.hasDirectedCycle();
-}
-
-function isCoveredEdge(graph: CausalGraph, fromIndex: number, toIndex: number): boolean {
-  const fromParents = getParentIndices(graph, fromIndex);
-  const toParents = getParentIndices(graph, toIndex).filter((parent) => parent !== fromIndex);
-  if (fromParents.length !== toParents.length) {
-    return false;
-  }
-
-  return fromParents.every((parent, index) => parent === toParents[index]);
-}
-
-function reverseEdge(graph: CausalGraph, fromIndex: number, toIndex: number): CausalGraph {
-  const fromId = graph.getNodeIdAt(fromIndex);
-  const toId = graph.getNodeIdAt(toIndex);
-  return graph.clone().removeEdge(fromId, toId).addDirectedEdge(toId, fromId);
-}
-
-function canReverseEdge(
-  graph: CausalGraph,
-  cpdag: CausalGraph,
-  fromIndex: number,
-  toIndex: number,
-  maxParents: number
-): boolean {
-  const fromId = graph.getNodeIdAt(fromIndex);
-  const toId = graph.getNodeIdAt(toIndex);
-  if (!graph.isParentOf(fromId, toId)) {
-    return false;
-  }
-
-  if (!isCoveredEdge(graph, fromIndex, toIndex)) {
-    return false;
-  }
-
-  const newParentCount = getParentIndices(graph, fromIndex).length + 1;
-  if (newParentCount > maxParents) {
-    return false;
-  }
-
-  const candidateCpdag = cpdag.clone().removeEdge(fromId, toId);
-  if (!canInsertEdge(candidateCpdag, toIndex, fromIndex, [])) {
-    return false;
-  }
-
-  const candidate = reverseEdge(graph, fromIndex, toIndex);
-  return !candidate.hasDirectedCycle();
-}
-
-function copyDagInto(target: CausalGraph, source: CausalGraph): void {
-  target.clearEdges();
-  for (const edge of source.getDirectedEdgePairs()) {
-    target.addDirectedEdge(edge.from, edge.to);
-  }
+  return canInsertEdge(cpdag, fromIndex, toIndex, subset);
 }
 
 function scoreDeltaForAdd(
@@ -255,25 +188,6 @@ function scoreDeltaForDelete(
   return score.score(to, newParents) - score.score(to, parents);
 }
 
-function scoreDeltaForReverse(
-  graph: CausalGraph,
-  from: number,
-  to: number,
-  score: GesOptions["score"]
-): number {
-  const fromParents = getParentIndices(graph, from);
-  const toParents = getParentIndices(graph, to);
-  const newFromParents = [...fromParents, to].sort((left, right) => left - right);
-  const newToParents = toParents.filter((parent) => parent !== from);
-
-  return (
-    score.score(from, newFromParents) +
-    score.score(to, newToParents) -
-    score.score(from, fromParents) -
-    score.score(to, toParents)
-  );
-}
-
 function canDeleteEdge(
   cpdag: CausalGraph,
   fromIndex: number,
@@ -293,20 +207,21 @@ function canDeleteEdge(
 }
 
 function applyInsert(
-  graph: CausalGraph,
   cpdag: CausalGraph,
   fromIndex: number,
   toIndex: number,
   subset: readonly number[]
 ): CausalGraph {
-  const candidate = graph.clone();
-  const fromId = graph.getNodeIdAt(fromIndex);
-  const toId = graph.getNodeIdAt(toIndex);
+  const candidate = cpdag.clone();
+  const fromId = cpdag.getNodeIdAt(fromIndex);
+  const toId = cpdag.getNodeIdAt(toIndex);
   candidate.addDirectedEdge(fromId, toId);
 
-  for (const neighborIndex of unionSorted(getNaIndices(cpdag, fromIndex, toIndex), subset)) {
-    const neighborId = graph.getNodeIdAt(neighborIndex);
-    candidate.removeEdge(neighborId, toId);
+  for (const neighborIndex of subset) {
+    const neighborId = cpdag.getNodeIdAt(neighborIndex);
+    if (candidate.isAdjacentTo(neighborId, toId)) {
+      candidate.removeEdge(neighborId, toId);
+    }
     candidate.addDirectedEdge(neighborId, toId);
   }
 
@@ -314,21 +229,24 @@ function applyInsert(
 }
 
 function applyDelete(
-  graph: CausalGraph,
+  cpdag: CausalGraph,
   fromIndex: number,
   toIndex: number,
   subset: readonly number[]
 ): CausalGraph {
-  const candidate = graph.clone();
-  const fromId = graph.getNodeIdAt(fromIndex);
-  const toId = graph.getNodeIdAt(toIndex);
+  const candidate = cpdag.clone();
+  const fromId = cpdag.getNodeIdAt(fromIndex);
+  const toId = cpdag.getNodeIdAt(toIndex);
   candidate.removeEdge(fromId, toId);
-  candidate.removeEdge(toId, fromId);
 
   for (const neighborIndex of subset) {
-    const neighborId = graph.getNodeIdAt(neighborIndex);
-    candidate.removeEdge(toId, neighborId);
-    candidate.removeEdge(fromId, neighborId);
+    const neighborId = cpdag.getNodeIdAt(neighborIndex);
+    if (candidate.isAdjacentTo(toId, neighborId)) {
+      candidate.removeEdge(toId, neighborId);
+    }
+    if (candidate.isAdjacentTo(fromId, neighborId)) {
+      candidate.removeEdge(fromId, neighborId);
+    }
     candidate.addDirectedEdge(toId, neighborId);
     candidate.addDirectedEdge(fromId, neighborId);
   }
@@ -336,55 +254,221 @@ function applyDelete(
   return candidate;
 }
 
-function dagToCpdag(graph: CausalGraph): CausalGraph {
-  const seen = new Set<string>();
-  const queue: CausalGraph[] = [graph.clone()];
-  const equivalentDags: CausalGraph[] = [];
+function checkPdagSink(graph: CausalGraph, nodeIndex: number, active: ReadonlySet<number>): boolean {
+  const neighbors = getUndirectedNeighborIndices(graph, nodeIndex).filter((index) => active.has(index));
+  const adjacent = getAdjacentIndices(graph, nodeIndex).filter((index) => active.has(index));
 
-  while (queue.length > 0) {
-    const current = queue.shift();
-    if (!current) {
-      continue;
-    }
-
-    const key = serializeDag(current);
-    if (seen.has(key)) {
-      continue;
-    }
-
-    seen.add(key);
-    equivalentDags.push(current);
-
-    for (const edge of current.getDirectedEdgePairs()) {
-      const fromIndex = current.getNodeIndex(edge.from);
-      const toIndex = current.getNodeIndex(edge.to);
-      if (!isCoveredEdge(current, fromIndex, toIndex)) {
+  for (const neighbor of neighbors) {
+    for (const candidate of adjacent) {
+      if (candidate === neighbor) {
         continue;
       }
 
-      const reversed = reverseEdge(current, fromIndex, toIndex);
-      if (!reversed.hasDirectedCycle()) {
-        queue.push(reversed);
+      if (!graph.isAdjacentTo(graph.getNodeIdAt(neighbor), graph.getNodeIdAt(candidate))) {
+        return false;
       }
     }
   }
 
-  const cpdag = graph.clone();
-  for (const edge of graph.getDirectedEdgePairs()) {
-    const forward = equivalentDags.every((candidate) => candidate.isParentOf(edge.from, edge.to));
-    const backward = equivalentDags.every((candidate) => candidate.isParentOf(edge.to, edge.from));
+  return true;
+}
 
-    if (forward) {
-      cpdag.orientEdge(edge.from, edge.to);
+function pdagToDag(cpdag: CausalGraph): CausalGraph {
+  const dag = new CausalGraph(cpdag.getNodes());
+  for (const edge of cpdag.getDirectedEdgePairs()) {
+    dag.addDirectedEdge(edge.from, edge.to);
+  }
+
+  const active = new Set<number>(Array.from({ length: cpdag.size }, (_, index) => index));
+  while (active.size > 0) {
+    let removed = false;
+
+    for (let nodeIndex = 0; nodeIndex < cpdag.size; nodeIndex += 1) {
+      if (!active.has(nodeIndex)) {
+        continue;
+      }
+
+      const activeChildren = getChildIndices(cpdag, nodeIndex).filter((index) => active.has(index));
+      if (activeChildren.length > 0) {
+        continue;
+      }
+
+      if (!checkPdagSink(cpdag, nodeIndex, active)) {
+        continue;
+      }
+
+      const nodeId = cpdag.getNodeIdAt(nodeIndex);
+      for (const neighborIndex of getUndirectedNeighborIndices(cpdag, nodeIndex).filter((index) =>
+        active.has(index)
+      )) {
+        dag.addDirectedEdge(cpdag.getNodeIdAt(neighborIndex), nodeId);
+      }
+
+      active.delete(nodeIndex);
+      removed = true;
+      break;
+    }
+
+    if (!removed) {
+      throw new Error("Failed to find a consistent extension for the current PDAG.");
+    }
+  }
+
+  return dag;
+}
+
+function getTopologicalOrder(graph: CausalGraph): number[] {
+  const indegree = Array.from({ length: graph.size }, (_, index) => getParentIndices(graph, index).length);
+  const queue = indegree
+    .map((degree, index) => ({ degree, index }))
+    .filter((entry) => entry.degree === 0)
+    .map((entry) => entry.index)
+    .sort((left, right) => left - right);
+  const order: number[] = [];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (current === undefined) {
       continue;
     }
 
-    if (backward) {
-      cpdag.orientEdge(edge.to, edge.from);
+    order.push(current);
+    for (const child of getChildIndices(graph, current)) {
+      indegree[child]! -= 1;
+      if (indegree[child] === 0) {
+        queue.push(child);
+        queue.sort((left, right) => left - right);
+      }
+    }
+  }
+
+  if (order.length !== graph.size) {
+    throw new Error("Expected a DAG when constructing a CPDAG.");
+  }
+
+  return order;
+}
+
+function dagToCpdag(graph: CausalGraph): CausalGraph {
+  const orderedNodes = getTopologicalOrder(graph);
+  const edges = graph.getDirectedEdgePairs().map((edge) => [
+    graph.getNodeIndex(edge.from),
+    graph.getNodeIndex(edge.to)
+  ] as const);
+  const orderedEdges: Array<readonly [number, number]> = [];
+
+  while (orderedEdges.length < edges.length) {
+    let target = -1;
+
+    for (let targetOrder = orderedNodes.length - 1; targetOrder >= 0; targetOrder -= 1) {
+      const candidateTarget = orderedNodes[targetOrder]!;
+      const incidentParents = getParentIndices(graph, candidateTarget);
+      if (incidentParents.length === 0) {
+        continue;
+      }
+
+      const orderedParents = orderedEdges
+        .filter(([, child]) => child === candidateTarget)
+        .map(([parent]) => parent);
+
+      if (incidentParents.some((parent) => !orderedParents.includes(parent))) {
+        target = candidateTarget;
+        break;
+      }
+    }
+
+    if (target < 0) {
+      throw new Error("Failed to order DAG edges for CPDAG conversion.");
+    }
+
+    for (const source of orderedNodes) {
+      const alreadyOrdered = orderedEdges.some(([parent, child]) => parent === source && child === target);
+      if (!alreadyOrdered && graph.isParentOf(graph.getNodeIdAt(source), graph.getNodeIdAt(target))) {
+        orderedEdges.push([source, target]);
+        break;
+      }
+    }
+  }
+
+  const labels = Array.from({ length: orderedEdges.length }, () => 0);
+  while (labels.includes(0)) {
+    let edgeIndex = -1;
+    for (let index = orderedEdges.length - 1; index >= 0; index -= 1) {
+      if (labels[index] === 0) {
+        edgeIndex = index;
+        break;
+      }
+    }
+
+    if (edgeIndex < 0) {
+      break;
+    }
+
+    const [from, to] = orderedEdges[edgeIndex]!;
+    let forced = false;
+
+    for (let parentEdgeIndex = 0; parentEdgeIndex < orderedEdges.length; parentEdgeIndex += 1) {
+      const [parent, child] = orderedEdges[parentEdgeIndex]!;
+      if (child !== from || labels[parentEdgeIndex] !== 1) {
+        continue;
+      }
+
+      if (!graph.isParentOf(graph.getNodeIdAt(parent), graph.getNodeIdAt(to))) {
+        for (let labelIndex = 0; labelIndex < orderedEdges.length; labelIndex += 1) {
+          if (orderedEdges[labelIndex]![1] === to) {
+            labels[labelIndex] = 1;
+          }
+        }
+        forced = true;
+        break;
+      }
+
+      const targetEdgeIndex = orderedEdges.findIndex(
+        ([candidateParent, candidateChild]) => candidateParent === parent && candidateChild === to
+      );
+      if (targetEdgeIndex >= 0) {
+        labels[targetEdgeIndex] = 1;
+      }
+    }
+
+    if (forced) {
       continue;
     }
 
-    cpdag.addUndirectedEdge(edge.from, edge.to);
+    const otherParents = getParentIndices(graph, to).filter((parent) => parent !== from);
+    const compelled = otherParents.some(
+      (parent) => !graph.isParentOf(graph.getNodeIdAt(parent), graph.getNodeIdAt(from))
+    );
+
+    if (compelled) {
+      labels[edgeIndex] = 1;
+      for (let labelIndex = 0; labelIndex < orderedEdges.length; labelIndex += 1) {
+        if (orderedEdges[labelIndex]![1] === to && labels[labelIndex] === 0) {
+          labels[labelIndex] = 1;
+        }
+      }
+      continue;
+    }
+
+    labels[edgeIndex] = -1;
+    for (let labelIndex = 0; labelIndex < orderedEdges.length; labelIndex += 1) {
+      if (orderedEdges[labelIndex]![1] === to && labels[labelIndex] === 0) {
+        labels[labelIndex] = -1;
+      }
+    }
+  }
+
+  const cpdag = new CausalGraph(graph.getNodes());
+  for (let index = 0; index < orderedEdges.length; index += 1) {
+    const [from, to] = orderedEdges[index]!;
+    const fromId = graph.getNodeIdAt(from);
+    const toId = graph.getNodeIdAt(to);
+
+    if (labels[index] === 1) {
+      cpdag.addDirectedEdge(fromId, toId);
+    } else {
+      cpdag.addUndirectedEdge(fromId, toId);
+    }
   }
 
   return cpdag;
@@ -393,21 +477,17 @@ function dagToCpdag(graph: CausalGraph): CausalGraph {
 export function ges(options: GesOptions): GesResult {
   const variableCount = options.data.columns;
   const nodeLabels = createNodeLabels(variableCount, options.nodeLabels);
-  const graph = new CausalGraph(nodeLabels.map((id) => ({ id })));
+  let cpdag = new CausalGraph(nodeLabels.map((id) => ({ id })));
   const maxParents = options.maxParents ?? Number.POSITIVE_INFINITY;
 
-  let currentScore = totalScore(graph, variableCount, options.score);
+  let currentScore = totalScore(pdagToDag(cpdag), variableCount, options.score);
   let forwardSteps = 0;
   let backwardSteps = 0;
   let reverseSteps = 0;
 
   while (true) {
-    const cpdag = dagToCpdag(graph);
     let bestDelta = 0;
-    let bestMove:
-      | { type: "add"; from: number; to: number; subset: number[] }
-      | { type: "reverse"; from: number; to: number }
-      | undefined;
+    let bestMove: { type: "add"; from: number; to: number; subset: number[] } | undefined;
 
     for (let from = 0; from < variableCount; from += 1) {
       for (let to = 0; to < variableCount; to += 1) {
@@ -427,7 +507,7 @@ export function ges(options: GesOptions): GesResult {
             [from]
           );
 
-          if (parentCandidates.length > maxParents || !canAddEdge(graph, cpdag, from, to, subset)) {
+          if (parentCandidates.length > maxParents || !canAddEdge(cpdag, from, to, subset)) {
             continue;
           }
 
@@ -440,42 +520,19 @@ export function ges(options: GesOptions): GesResult {
       }
     }
 
-    for (const edge of graph.getDirectedEdgePairs()) {
-      const from = graph.getNodeIndex(edge.from);
-      const to = graph.getNodeIndex(edge.to);
-      if (!canReverseEdge(graph, cpdag, from, to, maxParents)) {
-        continue;
-      }
-
-      const delta = scoreDeltaForReverse(graph, from, to, options.score);
-      if (delta < bestDelta) {
-        bestDelta = delta;
-        bestMove = { type: "reverse", from, to };
-      }
-    }
-
     if (!bestMove) {
       break;
     }
 
-    if (bestMove.type === "add") {
-      copyDagInto(graph, applyInsert(graph, cpdag, bestMove.from, bestMove.to, bestMove.subset));
-      forwardSteps += 1;
-    } else {
-      copyDagInto(graph, reverseEdge(graph, bestMove.from, bestMove.to));
-      reverseSteps += 1;
-    }
+    cpdag = dagToCpdag(pdagToDag(applyInsert(cpdag, bestMove.from, bestMove.to, bestMove.subset)));
+    forwardSteps += 1;
 
     currentScore += bestDelta;
   }
 
   while (true) {
-    const cpdag = dagToCpdag(graph);
     let bestDelta = 0;
-    let bestMove:
-      | { type: "delete"; from: number; to: number; subset: number[] }
-      | { type: "reverse"; from: number; to: number }
-      | undefined;
+    let bestMove: { type: "delete"; from: number; to: number; subset: number[] } | undefined;
 
     for (let from = 0; from < variableCount; from += 1) {
       for (let to = 0; to < variableCount; to += 1) {
@@ -495,11 +552,6 @@ export function ges(options: GesOptions): GesResult {
             continue;
           }
 
-          const candidate = applyDelete(graph, from, to, subset);
-          if (candidate.hasDirectedCycle()) {
-            continue;
-          }
-
           const delta = scoreDeltaForDelete(cpdag, from, to, subset, options.score);
           if (delta < bestDelta) {
             bestDelta = delta;
@@ -509,38 +561,19 @@ export function ges(options: GesOptions): GesResult {
       }
     }
 
-    for (const edge of graph.getDirectedEdgePairs()) {
-      const from = graph.getNodeIndex(edge.from);
-      const to = graph.getNodeIndex(edge.to);
-      if (!canReverseEdge(graph, cpdag, from, to, maxParents)) {
-        continue;
-      }
-
-      const delta = scoreDeltaForReverse(graph, from, to, options.score);
-      if (delta < bestDelta) {
-        bestDelta = delta;
-        bestMove = { type: "reverse", from, to };
-      }
-    }
-
     if (!bestMove) {
       break;
     }
 
-    if (bestMove.type === "delete") {
-      copyDagInto(graph, applyDelete(graph, bestMove.from, bestMove.to, bestMove.subset));
-      backwardSteps += 1;
-    } else {
-      copyDagInto(graph, reverseEdge(graph, bestMove.from, bestMove.to));
-      reverseSteps += 1;
-    }
+    cpdag = dagToCpdag(pdagToDag(applyDelete(cpdag, bestMove.from, bestMove.to, bestMove.subset)));
+    backwardSteps += 1;
 
     currentScore += bestDelta;
   }
 
   return {
-    dag: graph.toShape(),
-    cpdag: dagToCpdag(graph).toShape(),
+    dag: pdagToDag(cpdag).toShape(),
+    cpdag: cpdag.toShape(),
     forwardSteps,
     backwardSteps,
     reverseSteps,

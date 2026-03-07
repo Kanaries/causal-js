@@ -490,14 +490,36 @@ export class CausalGraph {
       });
   }
 
-  findAdjacencies(): IndexPair[] {
+  findArrowHeads(): IndexPair[] {
     const pairs: IndexPair[] = [];
-    for (let i = 0; i < this.size; i += 1) {
-      for (const neighbor of this.neighbors(i)) {
-        pairs.push([i, neighbor]);
+
+    for (let rowIndex = 0; rowIndex < this.size; rowIndex += 1) {
+      for (let columnIndex = 0; columnIndex < this.size; columnIndex += 1) {
+        if (this.getAdjacencyEndpoint(rowIndex, columnIndex) === EDGE_ENDPOINT.arrow) {
+          pairs.push([columnIndex, rowIndex]);
+        }
       }
     }
+
     return pairs;
+  }
+
+  findTails(): IndexPair[] {
+    const pairs: IndexPair[] = [];
+
+    for (let rowIndex = 0; rowIndex < this.size; rowIndex += 1) {
+      for (let columnIndex = 0; columnIndex < this.size; columnIndex += 1) {
+        if (this.getAdjacencyEndpoint(rowIndex, columnIndex) === EDGE_ENDPOINT.tail) {
+          pairs.push([columnIndex, rowIndex]);
+        }
+      }
+    }
+
+    return pairs;
+  }
+
+  findAdjacencies(): IndexPair[] {
+    return [...this.findTails(), ...this.findArrowHeads()];
   }
 
   isUndirected(index1: number, index2: number): boolean {

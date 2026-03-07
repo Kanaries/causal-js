@@ -91,6 +91,22 @@ describe("causal-learn parity", () => {
     ]);
   });
 
+  it("matches the linear_10 Fisher-Z PC benchmark from TestPC", () => {
+    const data = new DenseMatrix(loadTxtMatrix("data_linear_10.txt", 1));
+    const result = pc({
+      alpha: 0.05,
+      ciTest: new FisherZTest(data),
+      data,
+      nodeLabels: createNodeLabels(data.columns),
+      ucRule: 0,
+      ucPriority: 2
+    });
+
+    expect(toCausalLearnMatrix(result.graph)).toEqual(
+      loadTxtMatrix("benchmark_returned_results/linear_10_pc_fisherz_0.05_stable_0_2.txt")
+    );
+  });
+
   it("matches the linear Gaussian GES benchmark from TestGES", () => {
     const data = new DenseMatrix(loadTxtMatrix("data_linear_10.txt", 1));
     const result = ges({
@@ -101,6 +117,19 @@ describe("causal-learn parity", () => {
 
     expect(toCausalLearnMatrix(result.cpdag)).toEqual(
       loadTxtMatrix("benchmark_returned_results/linear_10_ges_local_score_BIC_none_none.txt")
+    );
+  });
+
+  it("matches the simulated Gaussian GES fixture from TestGES", () => {
+    const data = new DenseMatrix(loadTxtMatrix("test_ges_simulated_linear_gaussian_data.txt", 1));
+    const result = ges({
+      data,
+      score: new GaussianBicScore(data),
+      nodeLabels: createNodeLabels(data.columns)
+    });
+
+    expect(toCausalLearnMatrix(result.cpdag)).toEqual(
+      loadTxtMatrix("test_ges_simulated_linear_gaussian_CPDAG.txt")
     );
   });
 });

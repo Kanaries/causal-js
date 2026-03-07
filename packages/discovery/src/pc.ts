@@ -194,13 +194,14 @@ export function orientColliders(
       continue;
     }
 
-    if (graph.isUndirectedFromTo(xId, yId)) {
-      graph.orientEdge(xId, yId);
+    // causal-learn's uc_sepset(priority=2) only orients the collider when
+    // neither side has already been directed out of the center node.
+    if (graph.isParentOf(yId, xId) || graph.isParentOf(yId, zId)) {
+      continue;
     }
 
-    if (graph.isUndirectedFromTo(zId, yId)) {
-      graph.orientEdge(zId, yId);
-    }
+    graph.orientEdge(xId, yId);
+    graph.orientEdge(zId, yId);
   }
 
   return graph;
