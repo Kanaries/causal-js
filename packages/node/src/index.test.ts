@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { PcResult } from "@causal-js/discovery";
 
 import {
+  createDefaultPcNodeWorkerAdapter,
   createPcNodeWorkerAdapter,
   createNodeWorkerAdapter,
   detectNodeRuntimeCapabilities,
@@ -190,5 +191,70 @@ describe("@causal-js/node", () => {
     });
 
     unregister();
+  });
+
+  it("creates a default pc worker adapter that targets the packaged worker entry", async () => {
+    class FakeNodeWorkerThread {
+      static lastEntry: string | URL | undefined;
+      static lastOptions: unknown;
+      private readonly listeners = new Map<"message" | "error", Set<(value: unknown) => void>>([
+        ["message", new Set()],
+        ["error", new Set()]
+      ]);
+
+      constructor(entry: string | URL, options?: unknown) {
+        FakeNodeWorkerThread.lastEntry = entry;
+        FakeNodeWorkerThread.lastOptions = options;
+      }
+
+      postMessage(message: unknown): void {
+        const task = message as { id: string; options: { alpha: number } };
+        this.emit("message", {
+          id: task.id,
+          ok: true,
+          result: { mode: "worker", alpha: task.options.alpha }
+        });
+      }
+
+      on(event: "message" | "error", listener: (value: unknown) => void): void {
+        this.listeners.get(event)?.add(listener);
+      }
+
+      off(event: "message" | "error", listener: (value: unknown) => void): void {
+        this.listeners.get(event)?.delete(listener);
+      }
+
+      private emit(event: "message" | "error", value: unknown): void {
+        for (const listener of this.listeners.get(event) ?? []) {
+          listener(value);
+        }
+      }
+    }
+
+    const adapter = createDefaultPcNodeWorkerAdapter(FakeNodeWorkerThread, {
+      workerOptions: { workerData: { target: "pc" } }
+    });
+
+    await expect(
+      adapter.execute?.(
+        { alpha: 0.05 },
+        {
+          name: "node",
+          isNodeLike: true,
+          supportsWorkers: true,
+          supportsFileSystem: true,
+          supportsWebGpu: false,
+          nodeVersion: "20.11.1"
+        }
+      )
+    ).resolves.toMatchObject({
+      mode: "worker",
+      alpha: 0.05
+    });
+
+    expect(String(FakeNodeWorkerThread.lastEntry)).toContain("/workers/pc-worker-runtime.js");
+    expect(FakeNodeWorkerThread.lastOptions).toEqual({
+      workerData: { target: "pc" }
+    });
   });
 });

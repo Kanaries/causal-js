@@ -45,3 +45,32 @@ export function createPcWebWorkerAdapterFromWorker(
     createBrowserWorkerBridge(WorkerConstructor, entry, options)
   );
 }
+
+export interface DefaultPcWebWorkerInit {
+  name?: string;
+  credentials?: RequestCredentials;
+  type?: "classic" | "module";
+}
+
+export interface DefaultPcWebWorkerAdapterOptions {
+  entry?: string | URL;
+  workerOptions?: DefaultPcWebWorkerInit;
+}
+
+export function getDefaultPcWebWorkerEntry(): URL {
+  return new URL("./workers/pc-worker-runtime.js", import.meta.url);
+}
+
+export function createDefaultPcWebWorkerAdapter(
+  WorkerConstructor: BrowserWorkerConstructor,
+  options: DefaultPcWebWorkerAdapterOptions = {}
+): WebRuntimeAdapter {
+  return createPcWebWorkerAdapterFromWorker(
+    WorkerConstructor,
+    options.entry ?? getDefaultPcWebWorkerEntry(),
+    {
+      type: "module",
+      ...options.workerOptions
+    }
+  );
+}

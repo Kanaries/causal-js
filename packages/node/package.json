@@ -11,6 +11,16 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./workers/pc-worker-entry": {
+      "types": "./dist/workers/pc-worker-entry.d.ts",
+      "import": "./dist/workers/pc-worker-entry.js",
+      "require": "./dist/workers/pc-worker-entry.cjs"
+    },
+    "./workers/pc-worker-runtime": {
+      "types": "./dist/workers/pc-worker-runtime.d.ts",
+      "import": "./dist/workers/pc-worker-runtime.js",
+      "require": "./dist/workers/pc-worker-runtime.cjs"
     }
   },
   "sideEffects": false,
@@ -19,7 +29,7 @@
     "@causal-js/discovery": "workspace:*"
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm,cjs --dts",
+    "build": "tsup --config tsup.config.ts",
     "clean": "rimraf dist",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   }

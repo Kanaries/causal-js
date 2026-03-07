@@ -45,3 +45,23 @@ export function createPcNodeWorkerAdapterFromWorkerThread(
     createNodeWorkerThreadBridge(WorkerConstructor, entry, options)
   );
 }
+
+export interface DefaultPcNodeWorkerAdapterOptions {
+  entry?: string | URL;
+  workerOptions?: unknown;
+}
+
+export function getDefaultPcNodeWorkerEntry(): URL {
+  return new URL("./workers/pc-worker-runtime.js", import.meta.url);
+}
+
+export function createDefaultPcNodeWorkerAdapter(
+  WorkerConstructor: NodeWorkerConstructor,
+  options: DefaultPcNodeWorkerAdapterOptions = {}
+): NodeRuntimeAdapter {
+  return createPcNodeWorkerAdapterFromWorkerThread(
+    WorkerConstructor,
+    options.entry ?? getDefaultPcNodeWorkerEntry(),
+    options.workerOptions
+  );
+}

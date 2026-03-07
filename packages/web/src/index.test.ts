@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { PcResult } from "@causal-js/discovery";
 
 import {
+  createDefaultPcWebWorkerAdapter,
   createPcWebWorkerAdapter,
   createWebGpuAdapter,
   createWebWorkerAdapter,
@@ -207,5 +208,81 @@ describe("@causal-js/web", () => {
     });
 
     unregister();
+  });
+
+  it("creates a default pc web-worker adapter that targets the packaged worker entry", async () => {
+    class FakeBrowserWorker {
+      static lastEntry: string | URL | undefined;
+      static lastOptions: unknown;
+      private readonly listeners = new Map<
+        "message" | "error",
+        Set<(event: { data?: unknown }) => void>
+      >([
+        ["message", new Set()],
+        ["error", new Set()]
+      ]);
+
+      constructor(entry: string | URL, options?: unknown) {
+        FakeBrowserWorker.lastEntry = entry;
+        FakeBrowserWorker.lastOptions = options;
+      }
+
+      postMessage(message: unknown): void {
+        const task = message as { id: string; options: { alpha: number } };
+        this.emit("message", {
+          data: {
+            id: task.id,
+            ok: true,
+            result: { mode: "worker", alpha: task.options.alpha }
+          }
+        });
+      }
+
+      addEventListener(
+        type: "message" | "error",
+        listener: (event: { data?: unknown }) => void
+      ): void {
+        this.listeners.get(type)?.add(listener);
+      }
+
+      removeEventListener(
+        type: "message" | "error",
+        listener: (event: { data?: unknown }) => void
+      ): void {
+        this.listeners.get(type)?.delete(listener);
+      }
+
+      private emit(type: "message" | "error", event: { data?: unknown }): void {
+        for (const listener of this.listeners.get(type) ?? []) {
+          listener(event);
+        }
+      }
+    }
+
+    const adapter = createDefaultPcWebWorkerAdapter(FakeBrowserWorker, {
+      workerOptions: { name: "pc-worker" }
+    });
+
+    await expect(
+      adapter.execute?.(
+        { alpha: 0.05 },
+        {
+          name: "browser",
+          isBrowserLike: true,
+          supportsWebWorkers: true,
+          supportsWebGpu: false,
+          userAgent: "test-browser"
+        }
+      )
+    ).resolves.toMatchObject({
+      mode: "worker",
+      alpha: 0.05
+    });
+
+    expect(String(FakeBrowserWorker.lastEntry)).toContain("/workers/pc-worker-runtime.js");
+    expect(FakeBrowserWorker.lastOptions).toEqual({
+      type: "module",
+      name: "pc-worker"
+    });
   });
 });
