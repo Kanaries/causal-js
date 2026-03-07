@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import type { PcResult } from "@causal-js/discovery";
 
 import {
+  createPcWebWorkerAdapter,
   createWebGpuAdapter,
   createWebWorkerAdapter,
   detectWebRuntimeCapabilities,
@@ -153,11 +155,12 @@ describe("@causal-js/web", () => {
 
   it("executes through a registered worker adapter when available", async () => {
     const unregister = registerWebRuntimeAdapter(
-      createWebWorkerAdapter("pc", async (options, runtime) => ({
-        mode: "worker",
-        options,
-        runtime
-      }))
+      createPcWebWorkerAdapter({
+        runTask: async (task) => ({
+          mode: "worker",
+          task
+        }) as unknown as PcResult
+      })
     );
 
     await expect(
@@ -174,7 +177,11 @@ describe("@causal-js/web", () => {
       )
     ).resolves.toMatchObject({
       mode: "worker",
-      options: { alpha: 0.05 }
+      task: {
+        algorithmId: "pc",
+        options: { alpha: 0.05 },
+        runtime: "browser"
+      }
     });
 
     unregister();

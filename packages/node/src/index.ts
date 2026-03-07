@@ -19,6 +19,7 @@ import {
 
 export * from "@causal-js/core";
 export * from "@causal-js/discovery";
+export * from "./adapters/pc-worker";
 
 export interface NodeRuntimeInfo {
   name: "node";

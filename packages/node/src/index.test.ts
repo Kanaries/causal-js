@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import type { PcResult } from "@causal-js/discovery";
 
 import {
+  createPcNodeWorkerAdapter,
   createNodeWorkerAdapter,
   detectNodeRuntimeCapabilities,
   executeNodeAlgorithm,
@@ -157,11 +159,12 @@ describe("@causal-js/node", () => {
 
   it("executes through a registered worker adapter when available", async () => {
     const unregister = registerNodeRuntimeAdapter(
-      createNodeWorkerAdapter("pc", async (options, runtime) => ({
-        mode: "worker",
-        options,
-        runtime
-      }))
+      createPcNodeWorkerAdapter({
+        runTask: async (task) => ({
+          mode: "worker",
+          task
+        }) as unknown as PcResult
+      })
     );
 
     await expect(
@@ -179,7 +182,11 @@ describe("@causal-js/node", () => {
       )
     ).resolves.toMatchObject({
       mode: "worker",
-      options: { alpha: 0.05 }
+      task: {
+        algorithmId: "pc",
+        options: { alpha: 0.05 },
+        runtime: "node"
+      }
     });
 
     unregister();
