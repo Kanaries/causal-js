@@ -32,6 +32,14 @@ export const algorithmCatalog: AlgorithmDescriptor[] = [
     ]
   },
   {
+    id: "exact-search",
+    summary: "Exact score-based DAG search for small graphs using the shared local score interface.",
+    availability: [
+      { runtime: "node", supported: true, capabilities: ["cpu"] },
+      { runtime: "browser", supported: true, capabilities: ["cpu"] }
+    ]
+  },
+  {
     id: "calm",
     summary: "Expected to be Node-first because of heavier numerical dependencies.",
     availability: [

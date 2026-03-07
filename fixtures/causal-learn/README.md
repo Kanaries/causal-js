@@ -8,6 +8,7 @@ Current scope:
 - deterministic Fisher-Z PC fixture
 - deterministic Gaussian BIC GES fixture
 - deterministic domain-varying CD_NOD Fisher-Z fixture
+- deterministic Gaussian BIC ExactSearch fixture
 
 Selection rule for v1:
 

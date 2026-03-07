@@ -8,6 +8,7 @@ import { DenseMatrix, FisherZTest, GaussianBicScore, type GraphShape } from "@ca
 
 import { ges } from "./ges";
 import { cdnod } from "./cdnod";
+import { exactSearch } from "./exact-search";
 import { pc } from "./pc";
 
 const fixtureRoot = path.resolve(
@@ -158,5 +159,23 @@ describe("causal-learn parity", () => {
     expect(toCausalLearnMatrix(result.graph)).toEqual(
       loadTxtMatrix("benchmark_returned_results/domain_123_cdnod_fisherz_0.05_stable_0_2.txt")
     );
+  });
+
+  it("matches the simulated Gaussian ExactSearch CPDAG fixture", () => {
+    const data = new DenseMatrix(loadTxtMatrix("test_exact_search_simulated_linear_gaussian_data.txt"));
+    const expected = loadTxtMatrix("test_exact_search_simulated_linear_gaussian_CPDAG.txt");
+
+    for (const searchMethod of ["astar", "dp"] as const) {
+      const result = exactSearch({
+        data,
+        score: new GaussianBicScore(data),
+        nodeLabels: createNodeLabels(data.columns),
+        searchMethod,
+        usePathExtension: searchMethod === "astar",
+        useKCycleHeuristic: searchMethod === "astar"
+      });
+
+      expect(toCausalLearnMatrix(result.cpdag)).toEqual(expected);
+    }
   });
 });

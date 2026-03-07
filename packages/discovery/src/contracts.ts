@@ -27,6 +27,18 @@ export interface GesOptions {
   maxParents?: number;
 }
 
+export interface ExactSearchOptions {
+  data: NumericMatrix;
+  score: LocalScoreFunction;
+  nodeLabels?: readonly string[];
+  maxParents?: number;
+  searchMethod?: "dp" | "astar";
+  usePathExtension?: boolean;
+  useKCycleHeuristic?: boolean;
+  superGraph?: NumericMatrix | readonly (readonly number[])[];
+  includeGraph?: NumericMatrix | readonly (readonly number[])[];
+}
+
 export interface CdnodOptions {
   alpha?: number;
   data: NumericMatrix;
@@ -70,6 +82,15 @@ export interface GesResult {
   backwardSteps: number;
   reverseSteps: number;
   score: number;
+}
+
+export interface ExactSearchResult {
+  cpdag: GraphShape;
+  dag: GraphShape;
+  score: number;
+  searchMethod: "dp" | "astar";
+  evaluatedOrderStates: number;
+  evaluatedParentSets: number;
 }
 
 export function notImplemented(name: string): never {
