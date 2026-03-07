@@ -4,6 +4,26 @@ import type { WebRuntimeAdapter, WebRuntimeInfo } from "../index";
 import type { BrowserWorkerConstructor, WebWorkerBridge } from "../worker-bridge";
 import { createBrowserWorkerBridge } from "../worker-bridge";
 
+declare const __filename: string | undefined;
+
+function getCommonJsModuleUrl(filename: string): string | null {
+  const localRequire = Function(
+    "return typeof require !== 'undefined' ? require : undefined"
+  )() as
+    | ((
+        id: "node:url"
+      ) => {
+        pathToFileURL(path: string): URL;
+      })
+    | undefined;
+
+  if (!localRequire) {
+    return null;
+  }
+
+  return String(localRequire("node:url").pathToFileURL(filename));
+}
+
 export interface WebWorkerTaskRequest<TOptions = unknown> {
   algorithmId: string;
   options: TOptions;
@@ -58,7 +78,9 @@ export interface DefaultPcWebWorkerAdapterOptions {
 }
 
 export function getDefaultPcWebWorkerEntry(): URL {
-  return new URL("./workers/pc-worker-runtime.js", import.meta.url);
+  const commonJsUrl = typeof __filename === "string" ? getCommonJsModuleUrl(__filename) : null;
+  const baseUrl = commonJsUrl ?? import.meta.url;
+  return new URL("./workers/pc-worker-runtime.js", baseUrl);
 }
 
 export function createDefaultPcWebWorkerAdapter(

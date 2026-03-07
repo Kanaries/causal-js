@@ -16,6 +16,11 @@ import {
   type RuntimeCapability,
   type RuntimeExecutionResolution
 } from "@causal-js/core";
+import {
+  createDefaultPcNodeWorkerAdapter,
+  type DefaultPcNodeWorkerAdapterOptions
+} from "./adapters/pc-worker";
+import type { NodeWorkerConstructor } from "./worker-bridge";
 
 export * from "@causal-js/core";
 export * from "@causal-js/discovery";
@@ -170,6 +175,13 @@ export function createNodeWorkerAdapter(
     ...(execute ? { execute } : {}),
     summary
   };
+}
+
+export function registerDefaultPcNodeWorkerAdapter(
+  WorkerConstructor: NodeWorkerConstructor,
+  options: DefaultPcNodeWorkerAdapterOptions = {}
+): () => void {
+  return registerNodeRuntimeAdapter(createDefaultPcNodeWorkerAdapter(WorkerConstructor, options));
 }
 
 export function planNodeAlgorithmExecution(

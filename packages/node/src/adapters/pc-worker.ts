@@ -4,6 +4,26 @@ import type { NodeRuntimeAdapter, NodeRuntimeInfo } from "../index";
 import type { NodeWorkerBridge, NodeWorkerConstructor } from "../worker-bridge";
 import { createNodeWorkerThreadBridge } from "../worker-bridge";
 
+declare const __filename: string | undefined;
+
+function getCommonJsModuleUrl(filename: string): string | null {
+  const localRequire = Function(
+    "return typeof require !== 'undefined' ? require : undefined"
+  )() as
+    | ((
+        id: "node:url"
+      ) => {
+        pathToFileURL(path: string): URL;
+      })
+    | undefined;
+
+  if (!localRequire) {
+    return null;
+  }
+
+  return String(localRequire("node:url").pathToFileURL(filename));
+}
+
 export interface NodeWorkerTaskRequest<TOptions = unknown> {
   algorithmId: string;
   options: TOptions;
@@ -52,7 +72,9 @@ export interface DefaultPcNodeWorkerAdapterOptions {
 }
 
 export function getDefaultPcNodeWorkerEntry(): URL {
-  return new URL("./workers/pc-worker-runtime.js", import.meta.url);
+  const commonJsUrl = typeof __filename === "string" ? getCommonJsModuleUrl(__filename) : null;
+  const baseUrl = commonJsUrl ?? import.meta.url;
+  return new URL("./workers/pc-worker-runtime.js", baseUrl);
 }
 
 export function createDefaultPcNodeWorkerAdapter(

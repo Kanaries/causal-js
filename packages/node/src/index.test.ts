@@ -15,6 +15,7 @@ import {
   nodeAlgorithms,
   nodeRuntime,
   planNodeAlgorithmExecution,
+  registerDefaultPcNodeWorkerAdapter,
   registerNodeRuntimeAdapter,
   resolveNodeAlgorithmSupport
 } from "./index";
@@ -256,5 +257,61 @@ describe("@causal-js/node", () => {
     expect(FakeNodeWorkerThread.lastOptions).toEqual({
       workerData: { target: "pc" }
     });
+  });
+
+  it("registers a default pc worker adapter in one call", async () => {
+    class FakeNodeWorkerThread {
+      static lastEntry: string | URL | undefined;
+      private readonly listeners = new Map<"message" | "error", Set<(value: unknown) => void>>([
+        ["message", new Set()],
+        ["error", new Set()]
+      ]);
+
+      constructor(entry: string | URL) {
+        FakeNodeWorkerThread.lastEntry = entry;
+      }
+
+      postMessage(message: unknown): void {
+        const task = message as { id: string };
+        this.emit("message", {
+          id: task.id,
+          ok: true,
+          result: { mode: "worker-registered" }
+        });
+      }
+
+      on(event: "message" | "error", listener: (value: unknown) => void): void {
+        this.listeners.get(event)?.add(listener);
+      }
+
+      off(event: "message" | "error", listener: (value: unknown) => void): void {
+        this.listeners.get(event)?.delete(listener);
+      }
+
+      private emit(event: "message" | "error", value: unknown): void {
+        for (const listener of this.listeners.get(event) ?? []) {
+          listener(value);
+        }
+      }
+    }
+
+    const unregister = registerDefaultPcNodeWorkerAdapter(FakeNodeWorkerThread);
+
+    await expect(
+      executeNodeAlgorithm("pc", {}, {
+        name: "node",
+        isNodeLike: true,
+        supportsWorkers: true,
+        supportsFileSystem: true,
+        supportsWebGpu: false,
+        nodeVersion: "20.11.1"
+      })
+    ).resolves.toMatchObject({
+      mode: "worker-registered"
+    });
+
+    expect(String(FakeNodeWorkerThread.lastEntry)).toContain("/workers/pc-worker-runtime.js");
+
+    unregister();
   });
 });

@@ -13,6 +13,7 @@ import {
   isWebAlgorithmSupported,
   listRunnableWebAlgorithms,
   planWebAlgorithmExecution,
+  registerDefaultPcWebWorkerAdapter,
   registerWebRuntimeAdapter,
   resolveWebAlgorithmSupport,
   webAlgorithmCatalog,
@@ -284,5 +285,71 @@ describe("@causal-js/web", () => {
       type: "module",
       name: "pc-worker"
     });
+  });
+
+  it("registers a default pc web-worker adapter in one call", async () => {
+    class FakeBrowserWorker {
+      static lastEntry: string | URL | undefined;
+      private readonly listeners = new Map<
+        "message" | "error",
+        Set<(event: { data?: unknown }) => void>
+      >([
+        ["message", new Set()],
+        ["error", new Set()]
+      ]);
+
+      constructor(entry: string | URL) {
+        FakeBrowserWorker.lastEntry = entry;
+      }
+
+      postMessage(message: unknown): void {
+        const task = message as { id: string };
+        this.emit("message", {
+          data: {
+            id: task.id,
+            ok: true,
+            result: { mode: "worker-registered" }
+          }
+        });
+      }
+
+      addEventListener(
+        type: "message" | "error",
+        listener: (event: { data?: unknown }) => void
+      ): void {
+        this.listeners.get(type)?.add(listener);
+      }
+
+      removeEventListener(
+        type: "message" | "error",
+        listener: (event: { data?: unknown }) => void
+      ): void {
+        this.listeners.get(type)?.delete(listener);
+      }
+
+      private emit(type: "message" | "error", event: { data?: unknown }): void {
+        for (const listener of this.listeners.get(type) ?? []) {
+          listener(event);
+        }
+      }
+    }
+
+    const unregister = registerDefaultPcWebWorkerAdapter(FakeBrowserWorker);
+
+    await expect(
+      executeWebAlgorithm("pc", {}, {
+        name: "browser",
+        isBrowserLike: true,
+        supportsWebWorkers: true,
+        supportsWebGpu: false,
+        userAgent: "test-browser"
+      })
+    ).resolves.toMatchObject({
+      mode: "worker-registered"
+    });
+
+    expect(String(FakeBrowserWorker.lastEntry)).toContain("/workers/pc-worker-runtime.js");
+
+    unregister();
   });
 });

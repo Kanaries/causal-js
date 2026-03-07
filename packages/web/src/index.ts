@@ -16,6 +16,11 @@ import {
   type RuntimeCapability,
   type RuntimeExecutionResolution
 } from "@causal-js/core";
+import {
+  createDefaultPcWebWorkerAdapter,
+  type DefaultPcWebWorkerAdapterOptions
+} from "./adapters/pc-worker";
+import type { BrowserWorkerConstructor } from "./worker-bridge";
 
 export * from "@causal-js/core";
 export * from "@causal-js/discovery";
@@ -180,6 +185,13 @@ export function createWebGpuAdapter(
     ...(execute ? { execute } : {}),
     summary
   };
+}
+
+export function registerDefaultPcWebWorkerAdapter(
+  WorkerConstructor: BrowserWorkerConstructor,
+  options: DefaultPcWebWorkerAdapterOptions = {}
+): () => void {
+  return registerWebRuntimeAdapter(createDefaultPcWebWorkerAdapter(WorkerConstructor, options));
 }
 
 export function planWebAlgorithmExecution(
