@@ -52,6 +52,15 @@ export interface CdnodOptions {
   backgroundKnowledge?: BackgroundKnowledge;
 }
 
+export interface GraspOptions {
+  data: NumericMatrix;
+  score: LocalScoreFunction;
+  nodeLabels?: readonly string[];
+  depth?: number;
+  verbose?: boolean;
+  randomSeed?: number;
+}
+
 export interface AlgorithmResult {
   graph: GraphShape;
 }
@@ -91,6 +100,15 @@ export interface ExactSearchResult {
   searchMethod: "dp" | "astar";
   evaluatedOrderStates: number;
   evaluatedParentSets: number;
+}
+
+export interface GraspResult {
+  cpdag: GraphShape;
+  dag: GraphShape;
+  order: number[];
+  edgeCount: number;
+  score: number;
+  depth: number;
 }
 
 export function notImplemented(name: string): never {

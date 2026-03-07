@@ -40,6 +40,14 @@ export const algorithmCatalog: AlgorithmDescriptor[] = [
     ]
   },
   {
+    id: "grasp",
+    summary: "Permutation-based sparse DAG search built on the shared local score interface.",
+    availability: [
+      { runtime: "node", supported: true, capabilities: ["cpu"] },
+      { runtime: "browser", supported: true, capabilities: ["cpu"] }
+    ]
+  },
+  {
     id: "calm",
     summary: "Expected to be Node-first because of heavier numerical dependencies.",
     availability: [
