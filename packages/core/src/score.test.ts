@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { GaussianBicScore } from "./score";
+import { BDeuScore, GaussianBicScore } from "./score";
 import { DenseMatrix } from "./stats";
 
 function buildParentChildData(sampleSize: number): DenseMatrix {
@@ -26,6 +26,30 @@ describe("GaussianBicScore", () => {
     const score = new GaussianBicScore(buildParentChildData(180));
     const first = score.score(2, [0]);
     const second = score.score(2, [0]);
+
+    expect(second).toBe(first);
+  });
+});
+
+describe("BDeuScore", () => {
+  it("prefers the true parent over no parent for a discrete child node", () => {
+    const rows = Array.from({ length: 300 }, (_, index) => {
+      const parent = index % 3;
+      const child = (parent + (index % 2)) % 3;
+      const noise = index % 5;
+      return [parent, child, noise];
+    });
+
+    const score = new BDeuScore(new DenseMatrix(rows));
+
+    expect(score.score(1, [0])).toBeLessThan(score.score(1, []));
+  });
+
+  it("caches repeated requests", () => {
+    const rows = Array.from({ length: 180 }, (_, index) => [index % 2, index % 3, index % 4]);
+    const score = new BDeuScore(new DenseMatrix(rows));
+    const first = score.score(1, [0]);
+    const second = score.score(1, [0]);
 
     expect(second).toBe(first);
   });

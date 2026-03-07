@@ -478,7 +478,7 @@ export function ges(options: GesOptions): GesResult {
   const variableCount = options.data.columns;
   const nodeLabels = createNodeLabels(variableCount, options.nodeLabels);
   let cpdag = new CausalGraph(nodeLabels.map((id) => ({ id })));
-  const maxParents = options.maxParents ?? Number.POSITIVE_INFINITY;
+  const maxParents = options.maxParents ?? variableCount / 2;
 
   let currentScore = totalScore(pdagToDag(cpdag), variableCount, options.score);
   let forwardSteps = 0;
@@ -495,19 +495,16 @@ export function ges(options: GesOptions): GesResult {
           continue;
         }
 
+        if (getCpdagParentIndices(cpdag, to).length > maxParents) {
+          continue;
+        }
+
         const t0 = getUndirectedNeighborIndices(cpdag, to).filter(
           (candidateIndex) => !cpdag.isAdjacentTo(cpdag.getNodeIdAt(from), cpdag.getNodeIdAt(candidateIndex))
         );
 
         for (const subset of enumerateSubsets(t0)) {
-          const parentCandidates = unionSorted(
-            getCpdagParentIndices(cpdag, to),
-            getNaIndices(cpdag, from, to),
-            subset,
-            [from]
-          );
-
-          if (parentCandidates.length > maxParents || !canAddEdge(cpdag, from, to, subset)) {
+          if (!canAddEdge(cpdag, from, to, subset)) {
             continue;
           }
 

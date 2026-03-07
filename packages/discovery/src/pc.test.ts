@@ -117,7 +117,7 @@ describe("pc", () => {
     ]);
   });
 
-  it("accepts the current causal-learn-compatible ucRule and ucPriority pair", () => {
+  it("accepts the default causal-learn-compatible ucRule and ucPriority pair", () => {
     const data = buildColliderData(240);
     const ciTest = new FisherZTest(data);
 
@@ -136,22 +136,59 @@ describe("pc", () => {
     ]);
   });
 
-  it("rejects ucRule variants that are not implemented yet", () => {
+  it("supports maxP and definiteMaxP ucRule variants", () => {
     const data = buildColliderData(240);
     const ciTest = new FisherZTest(data);
 
-    expect(() =>
-      pc({
-        alpha: 0.05,
-        ciTest,
-        data,
-        nodeLabels: ["X", "Y", "Z"],
-        ucRule: 1
-      })
-    ).toThrow(/ucRule=1/);
+    const maxPResult = pc({
+      alpha: 0.05,
+      ciTest,
+      data,
+      nodeLabels: ["X", "Y", "Z"],
+      ucRule: 1,
+      ucPriority: -1
+    });
+    const definiteMaxPResult = pc({
+      alpha: 0.05,
+      ciTest,
+      data,
+      nodeLabels: ["X", "Y", "Z"],
+      ucRule: 2,
+      ucPriority: -1
+    });
+
+    expect(maxPResult.graph.edges).toEqual([
+      { node1: "X", node2: "Z", endpoint1: "tail", endpoint2: "arrow" },
+      { node1: "Y", node2: "Z", endpoint1: "tail", endpoint2: "arrow" }
+    ]);
+    expect(definiteMaxPResult.graph.edges).toEqual([
+      { node1: "X", node2: "Z", endpoint1: "tail", endpoint2: "arrow" },
+      { node1: "Y", node2: "Z", endpoint1: "tail", endpoint2: "arrow" }
+    ]);
   });
 
-  it("rejects ucPriority modes that are not implemented yet", () => {
+  it("supports all causal-learn ucPriority variants for ucRule=0", () => {
+    const data = buildColliderData(240);
+    const ciTest = new FisherZTest(data);
+
+    for (const ucPriority of [0, 1, 2, 3, 4, -1] as const) {
+      const result = pc({
+        alpha: 0.05,
+        ciTest,
+        data,
+        nodeLabels: ["X", "Y", "Z"],
+        ucRule: 0,
+        ucPriority
+      });
+
+      expect(result.graph.edges).toEqual([
+        { node1: "X", node2: "Z", endpoint1: "tail", endpoint2: "arrow" },
+        { node1: "Y", node2: "Z", endpoint1: "tail", endpoint2: "arrow" }
+      ]);
+    }
+  });
+
+  it("rejects invalid priority values for definiteMaxP", () => {
     const data = buildColliderData(240);
     const ciTest = new FisherZTest(data);
 
@@ -161,9 +198,10 @@ describe("pc", () => {
         ciTest,
         data,
         nodeLabels: ["X", "Y", "Z"],
-        ucPriority: 3
+        ucRule: 2,
+        ucPriority: 1
       })
-    ).toThrow(/ucPriority=3/);
+    ).toThrow(/invalid/);
   });
 
   it("uses background knowledge plus meek rules to orient a chain", () => {

@@ -4,6 +4,12 @@ export interface GaussianBicScoreOptions {
   penaltyDiscount?: number;
 }
 
+export interface BDeuScoreOptions {
+  samplePrior?: number;
+  structurePrior?: number;
+  stateCardinalities?: Record<number, number>;
+}
+
 function mean(values: readonly number[]): number {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
@@ -31,6 +37,37 @@ function covariance(left: readonly number[], right: readonly number[]): number {
 function covarianceMatrix(data: NumericMatrix): number[][] {
   const columns = Array.from({ length: data.columns }, (_, index) => data.column(index));
   return columns.map((leftColumn) => columns.map((rightColumn) => covariance(leftColumn, rightColumn)));
+}
+
+function logGamma(value: number): number {
+  if (value <= 0) {
+    throw new Error(`logGamma is only defined for positive values, got ${value}`);
+  }
+
+  const coefficients = [
+    676.5203681218851,
+    -1259.1392167224028,
+    771.3234287776531,
+    -176.6150291621406,
+    12.507343278686905,
+    -0.13857109526572012,
+    9.984369578019572e-6,
+    1.5056327351493116e-7
+  ];
+  const g = 7;
+
+  if (value < 0.5) {
+    return Math.log(Math.PI) - Math.log(Math.sin(Math.PI * value)) - logGamma(1 - value);
+  }
+
+  let sum = 0.9999999999998099;
+  const shifted = value - 1;
+  for (let index = 0; index < coefficients.length; index += 1) {
+    sum += coefficients[index]! / (shifted + index + 1);
+  }
+
+  const t = shifted + g + 0.5;
+  return 0.5 * Math.log(2 * Math.PI) + (shifted + 0.5) * Math.log(t) - t + Math.log(sum);
 }
 
 function invertMatrix(matrix: readonly (readonly number[])[]): number[][] {
@@ -186,5 +223,96 @@ export class GaussianBicScore implements LocalScoreFunction {
 
     this.cache.set(key, scoreValue);
     return scoreValue;
+  }
+}
+
+export class BDeuScore implements LocalScoreFunction {
+  readonly name = "local_score_BDeu";
+
+  private readonly samplePrior: number;
+  private readonly structurePrior: number;
+  private readonly variableCount: number;
+  private readonly stateCardinalities: Record<number, number>;
+  private readonly rows: readonly (readonly number[])[];
+  private readonly cache = new Map<string, number>();
+
+  constructor(data: NumericMatrix, options: BDeuScoreOptions = {}) {
+    this.samplePrior = options.samplePrior ?? 1;
+    this.structurePrior = options.structurePrior ?? 1;
+    this.variableCount = data.columns;
+    this.rows = data.toArray();
+    this.stateCardinalities =
+      options.stateCardinalities ??
+      Object.fromEntries(
+        Array.from({ length: data.columns }, (_, index) => [index, new Set(data.column(index)).size])
+      );
+  }
+
+  score(node: number, parents: readonly number[]): number {
+    const sortedParents = [...parents].sort((left, right) => left - right);
+    const key = `${node}|${sortedParents.join(",")}`;
+    const cached = this.cache.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const q = sortedParents.reduce((product, parent) => {
+      const cardinality = this.stateCardinalities[parent];
+      if (!cardinality) {
+        throw new Error(`Missing state cardinality for parent ${parent}`);
+      }
+      return product * cardinality;
+    }, 1);
+    const r = this.stateCardinalities[node];
+    if (!r) {
+      throw new Error(`Missing state cardinality for node ${node}`);
+    }
+
+    const parentCounts = new Map<
+      string,
+      {
+        total: number;
+        childCounts: Map<string, number>;
+      }
+    >();
+
+    for (const row of this.rows) {
+      const parentKey =
+        sortedParents.length === 0
+          ? ""
+          : sortedParents.map((parent) => String(row[parent])).join("|");
+      const childKey = String(row[node]);
+      const entry = parentCounts.get(parentKey) ?? {
+        total: 0,
+        childCounts: new Map<string, number>()
+      };
+      entry.total += 1;
+      entry.childCounts.set(childKey, (entry.childCounts.get(childKey) ?? 0) + 1);
+      parentCounts.set(parentKey, entry);
+    }
+
+    let scoreValue = 0;
+    const vm = this.variableCount - 1;
+    scoreValue +=
+      sortedParents.length * Math.log(this.structurePrior / vm) +
+      (vm - sortedParents.length) * Math.log(1 - this.structurePrior / vm);
+
+    for (const { total, childCounts } of parentCounts.values()) {
+      const firstTerm =
+        logGamma(this.samplePrior / q) - logGamma(total + this.samplePrior / q);
+      let secondTerm = 0;
+
+      for (const count of childCounts.values()) {
+        secondTerm +=
+          logGamma(count + this.samplePrior / (r * q)) -
+          logGamma(this.samplePrior / (r * q));
+      }
+
+      scoreValue += firstTerm + secondTerm;
+    }
+
+    const finalScore = -scoreValue;
+    this.cache.set(key, finalScore);
+    return finalScore;
   }
 }

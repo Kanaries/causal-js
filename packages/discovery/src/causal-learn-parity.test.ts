@@ -4,7 +4,15 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { DenseMatrix, FisherZTest, GaussianBicScore, type GraphShape } from "@causal-js/core";
+import {
+  BDeuScore,
+  DenseMatrix,
+  FisherZTest,
+  GSquareTest,
+  GaussianBicScore,
+  ChiSquareTest,
+  type GraphShape
+} from "@causal-js/core";
 
 import { ges } from "./ges";
 import { cdnod } from "./cdnod";
@@ -102,17 +110,53 @@ describe("causal-learn parity", () => {
 
   it("matches the linear_10 Fisher-Z PC benchmark from TestPC", () => {
     const data = new DenseMatrix(loadTxtMatrix("data_linear_10.txt", 1));
-    const result = pc({
+    for (const [ucRule, ucPriority, fixture] of [
+      [0, 0, "benchmark_returned_results/linear_10_pc_fisherz_0.05_stable_0_0.txt"],
+      [0, 1, "benchmark_returned_results/linear_10_pc_fisherz_0.05_stable_0_1.txt"],
+      [0, 2, "benchmark_returned_results/linear_10_pc_fisherz_0.05_stable_0_2.txt"],
+      [0, 3, "benchmark_returned_results/linear_10_pc_fisherz_0.05_stable_0_3.txt"],
+      [0, 4, "benchmark_returned_results/linear_10_pc_fisherz_0.05_stable_0_4.txt"],
+      [1, -1, "benchmark_returned_results/linear_10_pc_fisherz_0.05_stable_1_-1.txt"],
+      [2, -1, "benchmark_returned_results/linear_10_pc_fisherz_0.05_stable_2_-1.txt"]
+    ] as const) {
+      const result = pc({
+        alpha: 0.05,
+        ciTest: new FisherZTest(data),
+        data,
+        nodeLabels: createNodeLabels(data.columns),
+        ucRule,
+        ucPriority
+      });
+
+      expect(toCausalLearnMatrix(result.graph)).toEqual(loadTxtMatrix(fixture));
+    }
+  });
+
+  it("matches the discrete_10 PC benchmarks from TestPC", () => {
+    const data = new DenseMatrix(loadTxtMatrix("data_discrete_10.txt", 1));
+
+    const gsqResult = pc({
       alpha: 0.05,
-      ciTest: new FisherZTest(data),
+      ciTest: new GSquareTest(data),
       data,
       nodeLabels: createNodeLabels(data.columns),
       ucRule: 0,
-      ucPriority: 2
+      ucPriority: -1
+    });
+    const chisqResult = pc({
+      alpha: 0.05,
+      ciTest: new ChiSquareTest(data),
+      data,
+      nodeLabels: createNodeLabels(data.columns),
+      ucRule: 0,
+      ucPriority: -1
     });
 
-    expect(toCausalLearnMatrix(result.graph)).toEqual(
-      loadTxtMatrix("benchmark_returned_results/linear_10_pc_fisherz_0.05_stable_0_2.txt")
+    expect(toCausalLearnMatrix(gsqResult.graph)).toEqual(
+      loadTxtMatrix("benchmark_returned_results/discrete_10_pc_gsq_0.05_stable_0_-1.txt")
+    );
+    expect(toCausalLearnMatrix(chisqResult.graph)).toEqual(
+      loadTxtMatrix("benchmark_returned_results/discrete_10_pc_chisq_0.05_stable_0_-1.txt")
     );
   });
 
@@ -139,6 +183,21 @@ describe("causal-learn parity", () => {
 
     expect(toCausalLearnMatrix(result.cpdag)).toEqual(
       loadTxtMatrix("test_ges_simulated_linear_gaussian_CPDAG.txt")
+    );
+  });
+
+  it("matches the discrete GES BDeu runtime output from causal-learn", () => {
+    const data = new DenseMatrix(loadTxtMatrix("data_discrete_10.txt", 1));
+    const result = ges({
+      data,
+      score: new BDeuScore(data),
+      nodeLabels: createNodeLabels(data.columns)
+    });
+
+    expect(toCausalLearnMatrix(result.cpdag)).toEqual(
+      loadTxtMatrix(
+        "benchmark_returned_results/discrete_10_ges_local_score_BDeu_runtime_py310_pandas153.txt"
+      )
     );
   });
 

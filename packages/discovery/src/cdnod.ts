@@ -1,11 +1,8 @@
 import { CausalGraph, DenseMatrix, type NumericMatrix } from "@causal-js/core";
 
 import type { CdnodOptions, CdnodResult } from "./contracts";
-import { notImplemented } from "./contracts";
 import {
-  meekOrient,
-  orientByBackgroundKnowledge,
-  orientColliders,
+  orientPcGraph,
   skeletonDiscovery
 } from "./pc";
 
@@ -82,17 +79,6 @@ function orientContextNode(graph: CausalGraph, contextNodeId: string): void {
 }
 
 export function cdnod(options: CdnodOptions): CdnodResult {
-  const ucRule = options.ucRule ?? 0;
-  const ucPriority = options.ucPriority ?? 2;
-
-  if (ucRule !== 0) {
-    notImplemented(`cdnod ucRule=${ucRule}`);
-  }
-
-  if (ucPriority !== 2) {
-    notImplemented(`cdnod ucPriority=${ucPriority}`);
-  }
-
   const augmentedData = augmentWithContext(options.data, options.context);
   const nodeLabels = createAugmentedNodeLabels(
     options.data.columns,
@@ -121,9 +107,19 @@ export function cdnod(options: CdnodOptions): CdnodResult {
   }
 
   orientContextNode(graph, contextNodeId);
-  orientByBackgroundKnowledge(graph, options.backgroundKnowledge);
-  orientColliders(graph, skeleton.sepsets, options.backgroundKnowledge);
-  meekOrient(graph, options.backgroundKnowledge);
+  orientPcGraph(
+    graph,
+    {
+      ciTest,
+      ...(options.alpha !== undefined ? { alpha: options.alpha } : {}),
+      ...(options.backgroundKnowledge !== undefined
+        ? { backgroundKnowledge: options.backgroundKnowledge }
+        : {}),
+      ...(options.ucPriority !== undefined ? { ucPriority: options.ucPriority } : {}),
+      ...(options.ucRule !== undefined ? { ucRule: options.ucRule } : {})
+    },
+    skeleton.sepsets
+  );
 
   return {
     ...skeleton,

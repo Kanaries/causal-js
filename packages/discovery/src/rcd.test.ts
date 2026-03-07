@@ -45,18 +45,22 @@ describe("rcd", () => {
     15_000
   );
 
-  it("returns a graph with no confounder edges on the seeded baseline", () => {
-    const data = new DenseMatrix(loadTxtMatrix("test_rcd_seed100_data.txt"));
-    const result = rcd({
-      data,
-      nodeLabels: ["x0", "x1", "x2", "x3", "x4", "x5"]
-    });
+  it(
+    "returns a graph with no confounder edges on the seeded baseline",
+    () => {
+      const data = new DenseMatrix(loadTxtMatrix("test_rcd_seed100_data.txt"));
+      const result = rcd({
+        data,
+        nodeLabels: ["x0", "x1", "x2", "x3", "x4", "x5"]
+      });
 
-    expect(result.graph.nodes).toHaveLength(6);
-    expect(
-      result.graph.edges.filter(
-        (edge) => edge.endpoint1 === "arrow" && edge.endpoint2 === "arrow"
-      )
-    ).toEqual([]);
-  });
+      expect(result.graph.nodes).toHaveLength(6);
+      expect(
+        result.graph.edges.filter(
+          (edge) => edge.endpoint1 === "arrow" && edge.endpoint2 === "arrow"
+        )
+      ).toEqual([]);
+    },
+    15_000
+  );
 });

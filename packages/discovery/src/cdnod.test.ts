@@ -87,25 +87,30 @@ describe("cdnod", () => {
     });
   });
 
-  it("rejects uc variants that are outside the current v1 scope", () => {
+  it("supports the shared pc uc variants on the augmented graph", () => {
     const { data, context } = buildDomainShiftChainData(90);
 
-    expect(() =>
-      cdnod({
+    for (const [ucRule, ucPriority] of [
+      [0, 2],
+      [0, 3],
+      [1, -1],
+      [2, -1]
+    ] as const) {
+      const result = cdnod({
         data,
         context,
         createCiTest: (augmentedData) => new FisherZTest(augmentedData),
-        ucRule: 1
-      })
-    ).toThrow(/ucRule=1/);
+        ucRule,
+        ucPriority
+      });
 
-    expect(() =>
-      cdnod({
-        data,
-        context,
-        createCiTest: (augmentedData) => new FisherZTest(augmentedData),
-        ucPriority: 3
-      })
-    ).toThrow(/ucPriority=3/);
+      expect(result.contextNodeIndex).toBe(3);
+      expect(result.graph.edges).toContainEqual({
+        node1: "X1",
+        node2: "C",
+        endpoint1: "arrow",
+        endpoint2: "tail"
+      });
+    }
   });
 });

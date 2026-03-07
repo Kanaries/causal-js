@@ -5,6 +5,7 @@ import type { BrowserWorkerConstructor, WebWorkerBridge } from "../worker-bridge
 import { createBrowserWorkerBridge } from "../worker-bridge";
 
 declare const __filename: string | undefined;
+declare const __CAUSAL_JS_MODULE_URL__: string | undefined;
 
 function getCommonJsModuleUrl(filename: string): string | null {
   const localRequire = Function(
@@ -22,6 +23,19 @@ function getCommonJsModuleUrl(filename: string): string | null {
   }
 
   return String(localRequire("node:url").pathToFileURL(filename));
+}
+
+function getSourceModuleUrl(relativePathFromWorkspace: string): string | null {
+  const localProcess = Function(
+    "return typeof process !== 'undefined' ? process : undefined"
+  )() as { cwd?: () => string } | undefined;
+
+  if (!localProcess?.cwd) {
+    return null;
+  }
+
+  const normalizedPath = `${localProcess.cwd().replace(/\\/g, "/")}/${relativePathFromWorkspace}`;
+  return encodeURI(`file://${normalizedPath}`);
 }
 
 export interface WebWorkerTaskRequest<TOptions = unknown> {
@@ -79,7 +93,13 @@ export interface DefaultPcWebWorkerAdapterOptions {
 
 export function getDefaultPcWebWorkerEntry(): URL {
   const commonJsUrl = typeof __filename === "string" ? getCommonJsModuleUrl(__filename) : null;
-  const baseUrl = commonJsUrl ?? import.meta.url;
+  const moduleUrl =
+    typeof __CAUSAL_JS_MODULE_URL__ === "string" ? __CAUSAL_JS_MODULE_URL__ : undefined;
+  const sourceModuleUrl = getSourceModuleUrl("packages/web/src/adapters/pc-worker.ts");
+  const baseUrl = commonJsUrl ?? moduleUrl ?? sourceModuleUrl;
+  if (!baseUrl) {
+    throw new Error("Unable to resolve the packaged pc worker entry.");
+  }
   return new URL("./workers/pc-worker-runtime.js", baseUrl);
 }
 
