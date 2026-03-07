@@ -2,11 +2,15 @@ import { describe, expect, it } from "vitest";
 
 import {
   detectNodeRuntimeCapabilities,
+  getNodeRuntimeAdapters,
   getNodeAlgorithmDescriptor,
   isNodeAlgorithmSupported,
+  listRunnableNodeAlgorithms,
   nodeAlgorithmCatalog,
   nodeAlgorithms,
-  nodeRuntime
+  nodeRuntime,
+  registerNodeRuntimeAdapter,
+  resolveNodeAlgorithmSupport
 } from "./index";
 
 describe("@causal-js/node", () => {
@@ -72,5 +76,62 @@ describe("@causal-js/node", () => {
       "camuv",
       "rcd"
     ]);
+  });
+
+  it("resolves the preferred execution capability and fallback chain", () => {
+    expect(
+      resolveNodeAlgorithmSupport("pc", {
+        name: "node",
+        isNodeLike: true,
+        supportsWorkers: true,
+        supportsFileSystem: true,
+        supportsWebGpu: false,
+        nodeVersion: "20.11.1"
+      })
+    ).toMatchObject({
+      runtime: "node",
+      runnable: true,
+      selectedCapability: "worker",
+      fallbackCapabilities: ["cpu"],
+      missingCapabilities: [],
+      adapters: []
+    });
+
+    expect(
+      listRunnableNodeAlgorithms({
+        name: "node",
+        isNodeLike: true,
+        supportsWorkers: false,
+        supportsFileSystem: true,
+        supportsWebGpu: false,
+        nodeVersion: "20.11.1"
+      }).map((descriptor) => descriptor.id)
+    ).toContain("pc");
+  });
+
+  it("offers adapter slots for future runtime-specialized implementations", () => {
+    const unregister = registerNodeRuntimeAdapter({
+      algorithmId: "pc",
+      capability: "worker",
+      summary: "worker-thread execution"
+    });
+
+    expect(getNodeRuntimeAdapters("pc")).toEqual([
+      {
+        algorithmId: "pc",
+        capability: "worker",
+        summary: "worker-thread execution"
+      }
+    ]);
+    expect(resolveNodeAlgorithmSupport("pc").adapters).toEqual([
+      {
+        algorithmId: "pc",
+        capability: "worker",
+        summary: "worker-thread execution"
+      }
+    ]);
+
+    unregister();
+    expect(getNodeRuntimeAdapters("pc")).toEqual([]);
   });
 });

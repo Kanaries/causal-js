@@ -10,6 +10,12 @@ import {
   rcd,
   type AlgorithmDescriptor
 } from "@causal-js/discovery";
+import {
+  RUNTIME_CAPABILITY,
+  resolveAlgorithmRuntimeExecution,
+  type RuntimeCapability,
+  type RuntimeExecutionResolution
+} from "@causal-js/core";
 
 export * from "@causal-js/core";
 export * from "@causal-js/discovery";
@@ -52,6 +58,15 @@ export function detectNodeRuntimeCapabilities(
 
 export const nodeRuntime = detectNodeRuntimeCapabilities();
 
+export interface NodeRuntimeAdapter {
+  algorithmId: string;
+  capability: Exclude<RuntimeCapability, "cpu">;
+  isAvailable?: (runtime: NodeRuntimeInfo) => boolean;
+  summary?: string;
+}
+
+const nodeRuntimeAdapters: NodeRuntimeAdapter[] = [];
+
 export const nodeAlgorithmCatalog: AlgorithmDescriptor[] = algorithmCatalog
   .filter((descriptor) => descriptor.availability.some((entry) => entry.runtime === "node" && entry.supported))
   .map((descriptor) => ({
@@ -76,4 +91,49 @@ export function getNodeAlgorithmDescriptor(id: string): AlgorithmDescriptor | un
 
 export function isNodeAlgorithmSupported(id: string): boolean {
   return getNodeAlgorithmDescriptor(id)?.availability.some((entry) => entry.supported) ?? false;
+}
+
+export function registerNodeRuntimeAdapter(adapter: NodeRuntimeAdapter): () => void {
+  nodeRuntimeAdapters.push(adapter);
+  return () => {
+    const index = nodeRuntimeAdapters.indexOf(adapter);
+    if (index >= 0) {
+      nodeRuntimeAdapters.splice(index, 1);
+    }
+  };
+}
+
+export function getNodeRuntimeAdapters(algorithmId?: string): NodeRuntimeAdapter[] {
+  if (!algorithmId) {
+    return [...nodeRuntimeAdapters];
+  }
+  return nodeRuntimeAdapters.filter((adapter) => adapter.algorithmId === algorithmId);
+}
+
+export function resolveNodeAlgorithmSupport(
+  id: string,
+  runtime: NodeRuntimeInfo = nodeRuntime
+): RuntimeExecutionResolution & { adapters: NodeRuntimeAdapter[] } {
+  const descriptor = getNodeAlgorithmDescriptor(id);
+  const resolution = resolveAlgorithmRuntimeExecution(
+    descriptor?.availability ?? [],
+    "node",
+    {
+      [RUNTIME_CAPABILITY.cpu]: runtime.isNodeLike,
+      [RUNTIME_CAPABILITY.worker]: runtime.supportsWorkers,
+      [RUNTIME_CAPABILITY.webgpu]: runtime.supportsWebGpu
+    }
+  );
+  const adapters = getNodeRuntimeAdapters(id).filter(
+    (adapter) => adapter.isAvailable?.(runtime) ?? true
+  );
+
+  return {
+    ...resolution,
+    adapters
+  };
+}
+
+export function listRunnableNodeAlgorithms(runtime: NodeRuntimeInfo = nodeRuntime): AlgorithmDescriptor[] {
+  return nodeAlgorithmCatalog.filter((descriptor) => resolveNodeAlgorithmSupport(descriptor.id, runtime).runnable);
 }

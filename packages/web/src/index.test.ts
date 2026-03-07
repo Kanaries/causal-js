@@ -2,8 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   detectWebRuntimeCapabilities,
+  getWebRuntimeAdapters,
   getWebAlgorithmDescriptor,
   isWebAlgorithmSupported,
+  listRunnableWebAlgorithms,
+  registerWebRuntimeAdapter,
+  resolveWebAlgorithmSupport,
   webAlgorithmCatalog,
   webAlgorithms,
   webRuntime
@@ -70,5 +74,60 @@ describe("@causal-js/web", () => {
       "camuv",
       "rcd"
     ]);
+  });
+
+  it("resolves the preferred execution capability and fallback chain", () => {
+    expect(
+      resolveWebAlgorithmSupport("pc", {
+        name: "browser",
+        isBrowserLike: true,
+        supportsWebWorkers: true,
+        supportsWebGpu: false,
+        userAgent: "test-browser"
+      })
+    ).toMatchObject({
+      runtime: "browser",
+      runnable: true,
+      selectedCapability: "worker",
+      fallbackCapabilities: ["cpu"],
+      missingCapabilities: [],
+      adapters: []
+    });
+
+    expect(
+      listRunnableWebAlgorithms({
+        name: "browser",
+        isBrowserLike: true,
+        supportsWebWorkers: false,
+        supportsWebGpu: false,
+        userAgent: "test-browser"
+      }).map((descriptor) => descriptor.id)
+    ).toContain("pc");
+  });
+
+  it("offers adapter slots for future browser-specialized implementations", () => {
+    const unregister = registerWebRuntimeAdapter({
+      algorithmId: "pc",
+      capability: "webgpu",
+      summary: "webgpu execution"
+    });
+
+    expect(getWebRuntimeAdapters("pc")).toEqual([
+      {
+        algorithmId: "pc",
+        capability: "webgpu",
+        summary: "webgpu execution"
+      }
+    ]);
+    expect(resolveWebAlgorithmSupport("pc").adapters).toEqual([
+      {
+        algorithmId: "pc",
+        capability: "webgpu",
+        summary: "webgpu execution"
+      }
+    ]);
+
+    unregister();
+    expect(getWebRuntimeAdapters("pc")).toEqual([]);
   });
 });
