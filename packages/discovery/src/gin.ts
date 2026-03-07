@@ -1,4 +1,10 @@
-import { CausalGraph, NODE_TYPE, type GraphNode, type NumericMatrix } from "@causal-js/core";
+import {
+  CausalGraph,
+  KciUnconditionalTest,
+  NODE_TYPE,
+  type GraphNode,
+  type NumericMatrix
+} from "@causal-js/core";
 
 import type { GinIndependenceTestMethod, GinOptions, GinResult } from "./contracts";
 
@@ -655,7 +661,12 @@ function createIndependenceTest(method: GinIndependenceTestMethod): (left: reado
     throw new Error(`Independent test method ${method} is not implemented.`);
   }
 
-  return (left, right) => hsicGammaPValue(left, right);
+  if (method === "hsic") {
+    return (left, right) => hsicGammaPValue(left, right);
+  }
+
+  const kci = new KciUnconditionalTest();
+  return (left, right) => kci.computePValue(left, right).pValue;
 }
 
 export function gin(options: GinOptions): GinResult {
