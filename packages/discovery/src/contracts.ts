@@ -6,12 +6,17 @@ import type {
   NumericMatrix
 } from "@causal-js/core";
 
+export type PcUcRule = 0 | 1 | 2;
+export type PcUcPriority = -1 | 0 | 1 | 2 | 3 | 4;
+
 export interface PcOptions {
   alpha?: number;
   ciTest: ConditionalIndependenceTest;
   data: NumericMatrix;
   nodeLabels?: readonly string[];
   stable?: boolean;
+  ucRule?: PcUcRule;
+  ucPriority?: PcUcPriority;
   backgroundKnowledge?: BackgroundKnowledge;
 }
 

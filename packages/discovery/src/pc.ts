@@ -1,6 +1,7 @@
 import { CausalGraph, EDGE_ENDPOINT, type BackgroundKnowledge } from "@causal-js/core";
 
 import type { PcOptions, PcResult, PcSkeletonResult, SeparationSetEntry } from "./contracts";
+import { notImplemented } from "./contracts";
 
 function createNodeLabels(variableCount: number, nodeLabels?: readonly string[]): string[] {
   if (!nodeLabels) {
@@ -369,6 +370,17 @@ export function skeletonDiscovery(options: PcOptions): PcSkeletonResult {
 }
 
 export function pc(options: PcOptions): PcResult {
+  const ucRule = options.ucRule ?? 0;
+  const ucPriority = options.ucPriority ?? 2;
+
+  if (ucRule !== 0) {
+    notImplemented(`pc ucRule=${ucRule}`);
+  }
+
+  if (ucPriority !== 2) {
+    notImplemented(`pc ucPriority=${ucPriority}`);
+  }
+
   const skeleton = skeletonDiscovery(options);
   const graph = materializeGraph(skeleton);
 

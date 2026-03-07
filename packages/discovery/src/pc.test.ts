@@ -117,6 +117,55 @@ describe("pc", () => {
     ]);
   });
 
+  it("accepts the current causal-learn-compatible ucRule and ucPriority pair", () => {
+    const data = buildColliderData(240);
+    const ciTest = new FisherZTest(data);
+
+    const result = pc({
+      alpha: 0.05,
+      ciTest,
+      data,
+      nodeLabels: ["X", "Y", "Z"],
+      ucRule: 0,
+      ucPriority: 2
+    });
+
+    expect(result.graph.edges).toEqual([
+      { node1: "X", node2: "Z", endpoint1: "tail", endpoint2: "arrow" },
+      { node1: "Y", node2: "Z", endpoint1: "tail", endpoint2: "arrow" }
+    ]);
+  });
+
+  it("rejects ucRule variants that are not implemented yet", () => {
+    const data = buildColliderData(240);
+    const ciTest = new FisherZTest(data);
+
+    expect(() =>
+      pc({
+        alpha: 0.05,
+        ciTest,
+        data,
+        nodeLabels: ["X", "Y", "Z"],
+        ucRule: 1
+      })
+    ).toThrow(/ucRule=1/);
+  });
+
+  it("rejects ucPriority modes that are not implemented yet", () => {
+    const data = buildColliderData(240);
+    const ciTest = new FisherZTest(data);
+
+    expect(() =>
+      pc({
+        alpha: 0.05,
+        ciTest,
+        data,
+        nodeLabels: ["X", "Y", "Z"],
+        ucPriority: 3
+      })
+    ).toThrow(/ucPriority=3/);
+  });
+
   it("uses background knowledge plus meek rules to orient a chain", () => {
     const data = buildChainData(220);
     const ciTest = new FisherZTest(data);
