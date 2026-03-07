@@ -110,6 +110,58 @@ const result = ges({
 console.log(result.cpdag);
 ```
 
+### `CD_NOD`
+
+```ts
+import { DenseMatrix, FisherZTest } from "@causal-js/core";
+import { cdnod } from "@causal-js/discovery";
+
+const data = new DenseMatrix(rows);
+const context = [1, 1, 1, 2, 2, 2];
+const result = cdnod({
+  data,
+  context,
+  alpha: 0.05,
+  createCiTest: (augmentedData) => new FisherZTest(augmentedData),
+  ucRule: 0,
+  ucPriority: 2
+});
+
+console.log(result.contextNodeIndex);
+```
+
+### `ExactSearch`
+
+```ts
+import { DenseMatrix, GaussianBicScore } from "@causal-js/core";
+import { exactSearch } from "@causal-js/discovery";
+
+const data = new DenseMatrix(rows);
+const result = exactSearch({
+  data,
+  score: new GaussianBicScore(data),
+  searchMethod: "astar"
+});
+
+console.log(result.dag);
+```
+
+### `GIN`
+
+```ts
+import { DenseMatrix } from "@causal-js/core";
+import { gin } from "@causal-js/discovery";
+
+const data = new DenseMatrix(rows);
+const result = gin({
+  data,
+  indepTestMethod: "kci",
+  alpha: 0.05
+});
+
+console.log(result.causalOrder);
+```
+
 ### Runtime Facades
 
 ```ts
@@ -134,6 +186,22 @@ const result = pc({
 });
 
 console.log(webRuntime.supportsWebWorkers);
+```
+
+### Runtime Capability Matrix
+
+```ts
+import { nodeAlgorithmCatalog, isNodeAlgorithmSupported } from "@causal-js/node";
+
+console.log(nodeAlgorithmCatalog.map((entry) => entry.id));
+console.log(isNodeAlgorithmSupported("pc"));
+```
+
+```ts
+import { webAlgorithmCatalog, isWebAlgorithmSupported } from "@causal-js/web";
+
+console.log(webAlgorithmCatalog.map((entry) => entry.id));
+console.log(isWebAlgorithmSupported("calm"));
 ```
 
 ## Current Boundaries
