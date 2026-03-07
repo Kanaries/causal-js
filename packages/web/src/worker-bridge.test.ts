@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { createWebWorkerBridge, type WebWorkerBridgeMessagePort } from "./worker-bridge";
+import {
+  createBrowserWorkerBridge,
+  createWebWorkerBridge,
+  type WebWorkerBridgeMessagePort
+} from "./worker-bridge";
 
 class FakeWebWorkerPort implements WebWorkerBridgeMessagePort {
   private readonly listeners = new Map<
@@ -67,5 +71,22 @@ describe("createWebWorkerBridge", () => {
     await expect(bridge.runTask("ges", { alpha: 0.05 })).rejects.toThrow(
       "Unsupported algorithm ges"
     );
+  });
+
+  it("wraps a browser Worker constructor into the same bridge contract", async () => {
+    class FakeBrowserWorker extends FakeWebWorkerPort {
+      constructor(public readonly entry: string | URL, public readonly options?: unknown) {
+        super();
+      }
+    }
+
+    const bridge = createBrowserWorkerBridge(FakeBrowserWorker, "pc-worker.js", {
+      type: "module"
+    });
+
+    await expect(bridge.runTask("pc", { alpha: 0.01 })).resolves.toEqual({
+      mode: "worker",
+      alpha: 0.01
+    });
   });
 });

@@ -14,6 +14,12 @@ export interface WebWorkerBridge {
   runTask<TOptions, TResult>(algorithmId: string, options: TOptions): Promise<TResult>;
 }
 
+export type BrowserWorkerLike = WebWorkerBridgeMessagePort;
+
+export interface BrowserWorkerConstructor {
+  new (entry: string | URL, options?: unknown): BrowserWorkerLike;
+}
+
 function removeWebWorkerListener(
   port: WebWorkerBridgeMessagePort,
   type: "message" | "error",
@@ -60,4 +66,12 @@ export function createWebWorkerBridge(factory: () => WebWorkerBridgeMessagePort)
       });
     }
   };
+}
+
+export function createBrowserWorkerBridge(
+  WorkerConstructor: BrowserWorkerConstructor,
+  entry: string | URL,
+  options?: unknown
+): WebWorkerBridge {
+  return createWebWorkerBridge(() => new WorkerConstructor(entry, options));
 }

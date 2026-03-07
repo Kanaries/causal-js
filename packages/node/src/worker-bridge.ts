@@ -11,6 +11,12 @@ export interface NodeWorkerBridge {
   runTask<TOptions, TResult>(algorithmId: string, options: TOptions): Promise<TResult>;
 }
 
+export type NodeWorkerThreadLike = NodeWorkerBridgeMessagePort;
+
+export interface NodeWorkerConstructor {
+  new (entry: string | URL, options?: unknown): NodeWorkerThreadLike;
+}
+
 function removeNodeWorkerListener(
   port: NodeWorkerBridgeMessagePort,
   event: "message" | "error",
@@ -57,4 +63,12 @@ export function createNodeWorkerBridge(factory: () => NodeWorkerBridgeMessagePor
       });
     }
   };
+}
+
+export function createNodeWorkerThreadBridge(
+  WorkerConstructor: NodeWorkerConstructor,
+  entry: string | URL,
+  options?: unknown
+): NodeWorkerBridge {
+  return createNodeWorkerBridge(() => new WorkerConstructor(entry, options));
 }

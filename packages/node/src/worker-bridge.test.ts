@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { createNodeWorkerBridge, type NodeWorkerBridgeMessagePort } from "./worker-bridge";
+import {
+  createNodeWorkerBridge,
+  createNodeWorkerThreadBridge,
+  type NodeWorkerBridgeMessagePort
+} from "./worker-bridge";
 
 class FakeNodeWorkerPort implements NodeWorkerBridgeMessagePort {
   private readonly listeners = new Map<"message" | "error", Set<(value: unknown) => void>>([
@@ -57,5 +61,22 @@ describe("createNodeWorkerBridge", () => {
     await expect(bridge.runTask("ges", { alpha: 0.05 })).rejects.toThrow(
       "Unsupported algorithm ges"
     );
+  });
+
+  it("wraps a worker constructor into the same bridge contract", async () => {
+    class FakeNodeWorkerThread extends FakeNodeWorkerPort {
+      constructor(public readonly entry: string | URL, public readonly options?: unknown) {
+        super();
+      }
+    }
+
+    const bridge = createNodeWorkerThreadBridge(FakeNodeWorkerThread, "pc-worker.js", {
+      workerData: { name: "pc" }
+    });
+
+    await expect(bridge.runTask("pc", { alpha: 0.01 })).resolves.toEqual({
+      mode: "worker",
+      alpha: 0.01
+    });
   });
 });
