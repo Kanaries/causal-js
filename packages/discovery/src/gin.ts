@@ -658,7 +658,7 @@ function findRoot(
 
 function createIndependenceTest(method: GinIndependenceTestMethod): (left: readonly number[], right: readonly number[]) => number {
   if (method !== "hsic" && method !== "kci") {
-    throw new Error(`Independent test method ${method} is not implemented.`);
+    throw new Error(`Unsupported independence test method: ${method}`);
   }
 
   if (method === "hsic") {

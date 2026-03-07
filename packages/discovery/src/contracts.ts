@@ -158,7 +158,3 @@ export interface RcdResult extends AlgorithmResult {
   confoundedPairs: number[][];
   adjacencyMatrix: number[][];
 }
-
-export function notImplemented(name: string): never {
-  throw new Error(`${name} is not implemented yet.`);
-}
