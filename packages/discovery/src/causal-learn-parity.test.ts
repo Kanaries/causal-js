@@ -12,6 +12,7 @@ import { camuv } from "./camuv";
 import { exactSearch } from "./exact-search";
 import { pc } from "./pc";
 import { grasp } from "./grasp";
+import { rcd } from "./rcd";
 
 const fixtureRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -212,4 +213,28 @@ describe("causal-learn parity", () => {
     expect(result.parents).toEqual(expected.parents);
     expect(result.confoundedPairs).toEqual(expected.confoundedPairs);
   });
+
+  it(
+    "matches the seeded RCD fixture derived from TestRCD",
+    () => {
+      const data = new DenseMatrix(loadTxtMatrix("test_rcd_seed100_data.txt"));
+      const expected = loadJsonFixture<{
+        parents: number[][];
+        ancestors: number[][];
+        confoundedPairs: number[][];
+      adjacencyMatrix: number[][];
+    }>("benchmark_returned_results/test_rcd_seed100_default.json");
+
+    const result = rcd({
+      data,
+      nodeLabels: ["x0", "x1", "x2", "x3", "x4", "x5"]
+    });
+
+      expect(result.parents).toEqual(expected.parents);
+      expect(result.ancestors).toEqual(expected.ancestors);
+      expect(result.confoundedPairs).toEqual(expected.confoundedPairs);
+      expect(result.adjacencyMatrix).toEqual(expected.adjacencyMatrix);
+    },
+    15_000
+  );
 });

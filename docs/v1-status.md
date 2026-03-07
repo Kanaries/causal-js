@@ -36,7 +36,7 @@ approximation boundaries explicit.
 | `GIN` | `Selected-path parity` | The synthetic `TestGIN.py` cases are matched for both `hsic` and a standalone unconditional `kci` backend. |
 | `GRaSP` | `Selected-path parity` | A deterministic synthetic fixture derived from `causal-learn` is now locked into the parity suite for the current Gaussian BIC path. |
 | `CAM_UV` | `Seeded-fixture parity, smoother approximation` | The seeded `TestCAMUV.py` fixture is aligned, but the regression smoother is still a portable approximation rather than `pygam.LinearGAM`. |
-| `RCD` | `Portable approximation baseline` | Core flow is runnable, but SciPy / scikit-learn pieces are replaced with portable approximations such as Jarque-Bera in place of Shapiro-Wilk. |
+| `RCD` | `Seeded-fixture parity, test-stat approximation` | The seeded `TestRCD.py` fixture is aligned, but some statistical subroutines still use portable approximations. |
 
 ## V1 Boundary By Algorithm
 
@@ -137,8 +137,8 @@ Known approximation:
 
 In scope:
 
-- deterministic portable baseline
 - ancestor / parent / confounder extraction loop
+- selected deterministic parity on the seeded `TestRCD.py` path
 
 Known approximations:
 
