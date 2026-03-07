@@ -1,7 +1,8 @@
-import type { PcOptions, PcResult } from "@causal-js/discovery";
+import type { PcResult, SerializablePcTaskOptions } from "@causal-js/discovery";
 
 import type { WebRuntimeAdapter, WebRuntimeInfo } from "../index";
-import type { WebWorkerBridge } from "../worker-bridge";
+import type { BrowserWorkerConstructor, WebWorkerBridge } from "../worker-bridge";
+import { createBrowserWorkerBridge } from "../worker-bridge";
 
 export interface WebWorkerTaskRequest<TOptions = unknown> {
   algorithmId: string;
@@ -14,7 +15,7 @@ export interface WebWorkerTaskRunner<TOptions = unknown, TResult = unknown> {
 }
 
 export function createPcWebWorkerAdapter(
-  runner: WebWorkerTaskRunner<PcOptions, PcResult>
+  runner: WebWorkerTaskRunner<SerializablePcTaskOptions, PcResult>
 ): WebRuntimeAdapter {
   return {
     algorithmId: "pc",
@@ -23,7 +24,7 @@ export function createPcWebWorkerAdapter(
     execute: (options, _runtime: WebRuntimeInfo) =>
       runner.runTask({
         algorithmId: "pc",
-        options: options as PcOptions,
+        options: options as SerializablePcTaskOptions,
         runtime: "browser"
       })
   };
@@ -33,4 +34,14 @@ export function createPcWebWorkerAdapterFromBridge(bridge: WebWorkerBridge): Web
   return createPcWebWorkerAdapter({
     runTask: (task) => bridge.runTask(task.algorithmId, task.options)
   });
+}
+
+export function createPcWebWorkerAdapterFromWorker(
+  WorkerConstructor: BrowserWorkerConstructor,
+  entry: string | URL,
+  options?: unknown
+): WebRuntimeAdapter {
+  return createPcWebWorkerAdapterFromBridge(
+    createBrowserWorkerBridge(WorkerConstructor, entry, options)
+  );
 }

@@ -21,6 +21,7 @@ export * from "@causal-js/core";
 export * from "@causal-js/discovery";
 export * from "./adapters/pc-worker";
 export * from "./worker-bridge";
+export * from "./workers/pc-worker-entry";
 
 export interface WebRuntimeInfo {
   name: "browser";

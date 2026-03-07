@@ -7,4 +7,5 @@ export * from "./ges";
 export * from "./gin";
 export * from "./grasp";
 export * from "./pc";
+export * from "./pc-worker";
 export * from "./rcd";

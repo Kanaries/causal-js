@@ -1,7 +1,8 @@
-import type { PcOptions, PcResult } from "@causal-js/discovery";
+import type { PcResult, SerializablePcTaskOptions } from "@causal-js/discovery";
 
 import type { NodeRuntimeAdapter, NodeRuntimeInfo } from "../index";
-import type { NodeWorkerBridge } from "../worker-bridge";
+import type { NodeWorkerBridge, NodeWorkerConstructor } from "../worker-bridge";
+import { createNodeWorkerThreadBridge } from "../worker-bridge";
 
 export interface NodeWorkerTaskRequest<TOptions = unknown> {
   algorithmId: string;
@@ -14,7 +15,7 @@ export interface NodeWorkerTaskRunner<TOptions = unknown, TResult = unknown> {
 }
 
 export function createPcNodeWorkerAdapter(
-  runner: NodeWorkerTaskRunner<PcOptions, PcResult>
+  runner: NodeWorkerTaskRunner<SerializablePcTaskOptions, PcResult>
 ): NodeRuntimeAdapter {
   return {
     algorithmId: "pc",
@@ -23,7 +24,7 @@ export function createPcNodeWorkerAdapter(
     execute: (options, _runtime: NodeRuntimeInfo) =>
       runner.runTask({
         algorithmId: "pc",
-        options: options as PcOptions,
+        options: options as SerializablePcTaskOptions,
         runtime: "node"
       })
   };
@@ -33,4 +34,14 @@ export function createPcNodeWorkerAdapterFromBridge(bridge: NodeWorkerBridge): N
   return createPcNodeWorkerAdapter({
     runTask: (task) => bridge.runTask(task.algorithmId, task.options)
   });
+}
+
+export function createPcNodeWorkerAdapterFromWorkerThread(
+  WorkerConstructor: NodeWorkerConstructor,
+  entry: string | URL,
+  options?: unknown
+): NodeRuntimeAdapter {
+  return createPcNodeWorkerAdapterFromBridge(
+    createNodeWorkerThreadBridge(WorkerConstructor, entry, options)
+  );
 }
