@@ -27,6 +27,19 @@ export interface GesOptions {
   maxParents?: number;
 }
 
+export interface CdnodOptions {
+  alpha?: number;
+  data: NumericMatrix;
+  context: NumericMatrix | readonly number[];
+  createCiTest: (data: NumericMatrix) => ConditionalIndependenceTest;
+  nodeLabels?: readonly string[];
+  contextLabel?: string;
+  stable?: boolean;
+  ucRule?: PcUcRule;
+  ucPriority?: PcUcPriority;
+  backgroundKnowledge?: BackgroundKnowledge;
+}
+
 export interface AlgorithmResult {
   graph: GraphShape;
 }
@@ -44,6 +57,11 @@ export interface PcSkeletonResult extends AlgorithmResult {
 }
 
 export interface PcResult extends PcSkeletonResult {}
+
+export interface CdnodResult extends PcResult {
+  contextNodeIndex: number;
+  observedNodeCount: number;
+}
 
 export interface GesResult {
   cpdag: GraphShape;
