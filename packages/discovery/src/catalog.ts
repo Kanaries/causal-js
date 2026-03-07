@@ -64,6 +64,14 @@ export const algorithmCatalog: AlgorithmDescriptor[] = [
     ]
   },
   {
+    id: "rcd",
+    summary: "Linear non-Gaussian discovery with latent confounder detection using a portable OLS-plus-HSIC baseline.",
+    availability: [
+      { runtime: "node", supported: true, capabilities: ["cpu"] },
+      { runtime: "browser", supported: true, capabilities: ["cpu"] }
+    ]
+  },
+  {
     id: "calm",
     summary: "Expected to be Node-first because of heavier numerical dependencies.",
     availability: [

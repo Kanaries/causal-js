@@ -80,6 +80,16 @@ export interface CamuvOptions {
   ridgePenalty?: number;
 }
 
+export interface RcdOptions {
+  data: NumericMatrix;
+  nodeLabels?: readonly string[];
+  maxExplanatoryNum?: number;
+  corAlpha?: number;
+  indAlpha?: number;
+  shapiroAlpha?: number;
+  ridgePenalty?: number;
+}
+
 export interface AlgorithmResult {
   graph: GraphShape;
 }
@@ -140,6 +150,13 @@ export interface CamuvResult extends AlgorithmResult {
   parents: number[][];
   confoundedPairs: number[][];
   maxExplanatoryVars: number;
+}
+
+export interface RcdResult extends AlgorithmResult {
+  parents: number[][];
+  ancestors: number[][];
+  confoundedPairs: number[][];
+  adjacencyMatrix: number[][];
 }
 
 export function notImplemented(name: string): never {
