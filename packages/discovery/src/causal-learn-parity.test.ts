@@ -10,6 +10,7 @@ import { ges } from "./ges";
 import { cdnod } from "./cdnod";
 import { exactSearch } from "./exact-search";
 import { pc } from "./pc";
+import { grasp } from "./grasp";
 
 const fixtureRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -177,5 +178,17 @@ describe("causal-learn parity", () => {
 
       expect(toCausalLearnMatrix(result.cpdag)).toEqual(expected);
     }
+  });
+
+  it("matches the deterministic GRaSP CPDAG fixture derived from causal-learn", () => {
+    const data = new DenseMatrix(loadTxtMatrix("test_grasp_seed123_data.txt"));
+    const result = grasp({
+      data,
+      score: new GaussianBicScore(data, { penaltyDiscount: 4 }),
+      depth: 1,
+      randomSeed: 123
+    });
+
+    expect(toCausalLearnMatrix(result.cpdag)).toEqual(loadTxtMatrix("test_grasp_seed123_cpdag.txt"));
   });
 });

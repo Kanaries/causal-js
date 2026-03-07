@@ -34,7 +34,7 @@ approximation boundaries explicit.
 | `CD_NOD` | `Selected-path parity` | Deterministic domain-varying `Fisher-Z` path is aligned for the current supported option surface. |
 | `ExactSearch` | `Selected-path parity` | Simulated Gaussian CPDAG fixture is aligned for the current exact-DAG search baseline. |
 | `GIN` | `Parity on selected synthetic cases, backend approximation` | The synthetic `TestGIN.py` cases are matched, but `kci` currently reuses the same portable kernel-independence path as `hsic` instead of a distinct backend. |
-| `GRaSP` | `Portable baseline only` | Deterministic baseline and regression tests exist, but there is no official `causal-learn` parity fixture locked into the suite yet. |
+| `GRaSP` | `Selected-path parity` | A deterministic synthetic fixture derived from `causal-learn` is now locked into the parity suite for the current Gaussian BIC path. |
 | `CAM_UV` | `Portable approximation baseline` | Core flow is runnable, but `pygam.LinearGAM` is replaced with portable additive polynomial regression. |
 | `RCD` | `Portable approximation baseline` | Core flow is runnable, but SciPy / scikit-learn pieces are replaced with portable approximations such as Jarque-Bera in place of Shapiro-Wilk. |
 
@@ -114,12 +114,12 @@ Known approximation:
 
 In scope:
 
-- permutation-based baseline search
-- deterministic regression coverage
+- permutation-based search
+- deterministic parity fixture for the current Gaussian BIC path
 
 Known gap:
 
-- no official `causal-learn` parity fixture is locked yet
+- parity is currently locked to a deterministic synthetic fixture rather than a larger official benchmark suite
 
 ### `CAM_UV`
 
@@ -155,9 +155,9 @@ Priority should now be:
 
 Recommended order:
 
-1. `GRaSP`: add a true `causal-learn` parity fixture if a deterministic one can be frozen
-2. `GIN`: decide whether `kci` needs a separate backend for v1, or whether the current shared kernel path is acceptable
-3. `CAM_UV`: evaluate whether the current portable residualization is sufficient, or whether parity pressure justifies a stronger smoother
-4. `RCD`: decide whether the current Jarque-Bera approximation is sufficient, or whether normality testing needs tighter alignment
+1. `GIN`: decide whether `kci` needs a separate backend for v1, or whether the current shared kernel path is acceptable
+2. `CAM_UV`: evaluate whether the current portable residualization is sufficient, or whether parity pressure justifies a stronger smoother
+3. `RCD`: decide whether the current Jarque-Bera approximation is sufficient, or whether normality testing needs tighter alignment
+4. expand fixture coverage only where it materially raises confidence
 
 Only after that should runtime-specific acceleration be revisited.
