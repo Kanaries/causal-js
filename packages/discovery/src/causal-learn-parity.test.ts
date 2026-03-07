@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { DenseMatrix, FisherZTest, GaussianBicScore, type GraphShape } from "@causal-js/core";
 
 import { ges } from "./ges";
+import { cdnod } from "./cdnod";
 import { pc } from "./pc";
 
 const fixtureRoot = path.resolve(
@@ -130,6 +131,32 @@ describe("causal-learn parity", () => {
 
     expect(toCausalLearnMatrix(result.cpdag)).toEqual(
       loadTxtMatrix("test_ges_simulated_linear_gaussian_CPDAG.txt")
+    );
+  });
+
+  it("matches the deterministic domain-varying CD_NOD Fisher-Z benchmark", () => {
+    const domain1 = loadTxtMatrix("data_linear_1.txt", 1).slice(0, 100);
+    const domain2 = loadTxtMatrix("data_linear_2.txt", 1).slice(0, 100);
+    const domain3 = loadTxtMatrix("data_linear_3.txt", 1).slice(0, 100);
+    const data = new DenseMatrix([...domain1, ...domain2, ...domain3]);
+    const context = [
+      ...Array.from({ length: domain1.length }, () => 1),
+      ...Array.from({ length: domain2.length }, () => 2),
+      ...Array.from({ length: domain3.length }, () => 3)
+    ];
+
+    const result = cdnod({
+      alpha: 0.05,
+      data,
+      context,
+      nodeLabels: createNodeLabels(data.columns),
+      createCiTest: (augmentedData) => new FisherZTest(augmentedData),
+      ucRule: 0,
+      ucPriority: 2
+    });
+
+    expect(toCausalLearnMatrix(result.graph)).toEqual(
+      loadTxtMatrix("benchmark_returned_results/domain_123_cdnod_fisherz_0.05_stable_0_2.txt")
     );
   });
 });
