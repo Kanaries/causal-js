@@ -1,6 +1,7 @@
 import type { PcOptions, PcResult } from "@causal-js/discovery";
 
 import type { WebRuntimeAdapter, WebRuntimeInfo } from "../index";
+import type { WebWorkerBridge } from "../worker-bridge";
 
 export interface WebWorkerTaskRequest<TOptions = unknown> {
   algorithmId: string;
@@ -26,4 +27,10 @@ export function createPcWebWorkerAdapter(
         runtime: "browser"
       })
   };
+}
+
+export function createPcWebWorkerAdapterFromBridge(bridge: WebWorkerBridge): WebRuntimeAdapter {
+  return createPcWebWorkerAdapter({
+    runTask: (task) => bridge.runTask(task.algorithmId, task.options)
+  });
 }

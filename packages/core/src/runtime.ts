@@ -33,6 +33,31 @@ export interface RuntimeExecutionResolution {
   fallbackCapabilities: RuntimeCapability[];
 }
 
+export interface WorkerTaskEnvelope<TOptions = unknown> {
+  id: string;
+  algorithmId: string;
+  options: TOptions;
+  runtime: RuntimeTarget;
+}
+
+export interface WorkerSuccessEnvelope<TResult = unknown> {
+  id: string;
+  ok: true;
+  result: TResult;
+}
+
+export interface WorkerFailureEnvelope {
+  id: string;
+  ok: false;
+  error: {
+    message: string;
+  };
+}
+
+export type WorkerResponseEnvelope<TResult = unknown> =
+  | WorkerSuccessEnvelope<TResult>
+  | WorkerFailureEnvelope;
+
 export function getAvailabilityForRuntime(
   availability: readonly AlgorithmAvailability[],
   runtime: RuntimeTarget
@@ -69,5 +94,21 @@ export function resolveAlgorithmRuntimeExecution(
     missingCapabilities,
     selectedCapability: orderedAvailable[0] ?? null,
     fallbackCapabilities: orderedAvailable.slice(1)
+  };
+}
+
+let workerTaskCounter = 0;
+
+export function createWorkerTaskEnvelope<TOptions>(
+  algorithmId: string,
+  options: TOptions,
+  runtime: RuntimeTarget
+): WorkerTaskEnvelope<TOptions> {
+  workerTaskCounter += 1;
+  return {
+    id: `task-${workerTaskCounter}`,
+    algorithmId,
+    options,
+    runtime
   };
 }

@@ -1,6 +1,7 @@
 import type { PcOptions, PcResult } from "@causal-js/discovery";
 
 import type { NodeRuntimeAdapter, NodeRuntimeInfo } from "../index";
+import type { NodeWorkerBridge } from "../worker-bridge";
 
 export interface NodeWorkerTaskRequest<TOptions = unknown> {
   algorithmId: string;
@@ -26,4 +27,10 @@ export function createPcNodeWorkerAdapter(
         runtime: "node"
       })
   };
+}
+
+export function createPcNodeWorkerAdapterFromBridge(bridge: NodeWorkerBridge): NodeRuntimeAdapter {
+  return createPcNodeWorkerAdapter({
+    runTask: (task) => bridge.runTask(task.algorithmId, task.options)
+  });
 }
