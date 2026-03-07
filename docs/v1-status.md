@@ -35,7 +35,7 @@ approximation boundaries explicit.
 | `ExactSearch` | `Selected-path parity` | Simulated Gaussian CPDAG fixture is aligned for the current exact-DAG search baseline. |
 | `GIN` | `Selected-path parity` | The synthetic `TestGIN.py` cases are matched for both `hsic` and a standalone unconditional `kci` backend. |
 | `GRaSP` | `Selected-path parity` | A deterministic synthetic fixture derived from `causal-learn` is now locked into the parity suite for the current Gaussian BIC path. |
-| `CAM_UV` | `Portable approximation baseline` | Core flow is runnable, but `pygam.LinearGAM` is replaced with portable additive polynomial regression. |
+| `CAM_UV` | `Seeded-fixture parity, smoother approximation` | The seeded `TestCAMUV.py` fixture is aligned, but the regression smoother is still a portable approximation rather than `pygam.LinearGAM`. |
 | `RCD` | `Portable approximation baseline` | Core flow is runnable, but SciPy / scikit-learn pieces are replaced with portable approximations such as Jarque-Bera in place of Shapiro-Wilk. |
 
 ## V1 Boundary By Algorithm
@@ -126,8 +126,8 @@ Known gap:
 
 In scope:
 
-- deterministic portable baseline
-- causal parent and confounder-pair recovery on the seeded fixture
+- causal parent and confounder-pair recovery on the seeded `TestCAMUV.py` fixture
+- selected deterministic parity on the current seeded path
 
 Known approximation:
 

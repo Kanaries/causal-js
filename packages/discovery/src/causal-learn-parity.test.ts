@@ -8,6 +8,7 @@ import { DenseMatrix, FisherZTest, GaussianBicScore, type GraphShape } from "@ca
 
 import { ges } from "./ges";
 import { cdnod } from "./cdnod";
+import { camuv } from "./camuv";
 import { exactSearch } from "./exact-search";
 import { pc } from "./pc";
 import { grasp } from "./grasp";
@@ -24,6 +25,10 @@ function loadTxtMatrix(filename: string, skipRows = 0): number[][] {
     .slice(skipRows)
     .filter(Boolean)
     .map((line) => line.trim().split(/\s+/).map(Number));
+}
+
+function loadJsonFixture<T>(filename: string): T {
+  return JSON.parse(readFileSync(path.join(fixtureRoot, filename), "utf8")) as T;
 }
 
 function createNodeLabels(count: number): string[] {
@@ -190,5 +195,21 @@ describe("causal-learn parity", () => {
     });
 
     expect(toCausalLearnMatrix(result.cpdag)).toEqual(loadTxtMatrix("test_grasp_seed123_cpdag.txt"));
+  });
+
+  it("matches the seeded CAM-UV fixture derived from TestCAMUV", () => {
+    const data = new DenseMatrix(loadTxtMatrix("test_camuv_seed42_data.txt"));
+    const expected = loadJsonFixture<{ parents: number[][]; confoundedPairs: number[][] }>(
+      "benchmark_returned_results/test_camuv_seed42_alpha0.01_max3.json"
+    );
+
+    const result = camuv({
+      data,
+      alpha: 0.01,
+      maxExplanatoryVars: 3
+    });
+
+    expect(result.parents).toEqual(expected.parents);
+    expect(result.confoundedPairs).toEqual(expected.confoundedPairs);
   });
 });
