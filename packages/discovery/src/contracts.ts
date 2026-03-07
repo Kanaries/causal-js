@@ -71,6 +71,15 @@ export interface GinOptions {
   latentLabelPrefix?: string;
 }
 
+export interface CamuvOptions {
+  data: NumericMatrix;
+  alpha?: number;
+  maxExplanatoryVars?: number;
+  nodeLabels?: readonly string[];
+  polynomialDegree?: number;
+  ridgePenalty?: number;
+}
+
 export interface AlgorithmResult {
   graph: GraphShape;
 }
@@ -125,6 +134,12 @@ export interface GinResult extends AlgorithmResult {
   causalOrder: number[][];
   remainingClusters: number[][];
   indepTestMethod: GinIndependenceTestMethod;
+}
+
+export interface CamuvResult extends AlgorithmResult {
+  parents: number[][];
+  confoundedPairs: number[][];
+  maxExplanatoryVars: number;
 }
 
 export function notImplemented(name: string): never {

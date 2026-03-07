@@ -56,6 +56,14 @@ export const algorithmCatalog: AlgorithmDescriptor[] = [
     ]
   },
   {
+    id: "cam-uv",
+    summary: "Nonlinear causal discovery with latent confounder hints using a portable additive-regression approximation.",
+    availability: [
+      { runtime: "node", supported: true, capabilities: ["cpu"] },
+      { runtime: "browser", supported: true, capabilities: ["cpu"] }
+    ]
+  },
+  {
     id: "calm",
     summary: "Expected to be Node-first because of heavier numerical dependencies.",
     availability: [
