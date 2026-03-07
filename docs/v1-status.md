@@ -156,8 +156,9 @@ Priority should now be:
 
 Recommended order:
 
-1. `CAM_UV`: evaluate whether the current portable residualization is sufficient, or whether parity pressure justifies a stronger smoother
-2. `RCD`: decide whether the current Jarque-Bera approximation is sufficient, or whether normality testing needs tighter alignment
-3. expand fixture coverage only where it materially raises confidence
+1. freeze the current external API surface in docs and examples
+2. expand parity fixtures only where they materially raise confidence
+3. revisit `CAM_UV` smoothing only if a concrete fixture gap appears
+4. revisit `RCD` normality and regression internals only if a concrete fixture gap appears
 
 Only after that should runtime-specific acceleration be revisited.

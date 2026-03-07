@@ -74,7 +74,7 @@ See [v1-status.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js
 
 ## Suggested Near-Term Work Items
 
-1. Tighten parity for `GRaSP`, `GIN`, `CAM_UV`, and `RCD`
-2. Keep approximation-heavy substitutions documented in code and docs
-3. Expand parity fixtures only when they close a concrete confidence gap
-4. Revisit runtime specialization only after the portable baseline is judged stable
+1. freeze the external v1 API surface in docs and examples
+2. keep approximation-heavy substitutions documented in code and docs
+3. expand parity fixtures only when they close a concrete confidence gap
+4. revisit runtime specialization only after the portable baseline is judged stable
