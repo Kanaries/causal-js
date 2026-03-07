@@ -8,6 +8,7 @@
   "scripts": {
     "build": "pnpm -r build",
     "clean": "pnpm -r clean",
+    "compare:causal-learn": "node scripts/compare-causal-learn.cjs",
     "test": "vitest run",
     "typecheck": "pnpm -r typecheck"
   },
