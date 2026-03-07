@@ -24,15 +24,28 @@ integrations so the project can support:
 - Avoid forcing Node.js and browser exports to stay identical
 - Add hardware-accelerated implementations behind separate packages or adapters
 
-## Planned Migration Order
+## Current Baseline
 
-1. Graph primitives, adjacency representation, and background knowledge
-2. Conditional independence test interfaces and score interfaces
-3. PC and supporting Fisher-Z / discrete CI tests
-4. GES with BIC/BDeu-style scoring
-5. FCI and advanced kernels / accelerators
+The first requested algorithm wave is now runnable:
 
-See [docs/architecture.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/architecture.md) and [docs/roadmap.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/roadmap.md).
+- `PC`
+- `CD_NOD`
+- `GES`
+- `ExactSearch`
+- `GIN`
+- `GRaSP`
+- `CAM_UV`
+- `RCD`
+
+These algorithms are not all at the same maturity level. Some are already
+aligned on selected `causal-learn` fixtures, while others are portable
+approximations with explicit parity gaps.
+
+See:
+
+- [architecture.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/architecture.md)
+- [roadmap.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/roadmap.md)
+- [v1-status.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/v1-status.md)
 
 ## Development
 

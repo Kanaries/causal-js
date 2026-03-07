@@ -59,10 +59,22 @@ Deliverable: second portable flagship algorithm.
 - benchmark suite across runtimes
 - compatibility matrix in docs and package metadata
 
+## Current Focus
+
+As of 2026-03-07, the first requested algorithm wave is already runnable.
+The roadmap priority is no longer "add the next algorithm at any cost".
+It is now:
+
+1. freeze the current baseline and fixture set
+2. separate true parity from portable approximation clearly
+3. tighten parity only where it changes confidence materially
+4. delay runtime-specific acceleration until parity needs force it
+
+See [v1-status.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/v1-status.md) for the current algorithm-by-algorithm status matrix.
+
 ## Suggested Near-Term Work Items
 
-1. Port `causallearn/graph/*` concepts into `@causal-js/core`
-2. Define a matrix abstraction that does not force one numerical backend
-3. Port `causallearn/utils/cit.py` Fisher-Z path first
-4. Port PC helpers in this order: skeleton discovery, UC sepset, Meek
-5. Build fixture parity tests against selected `causal-learn/tests` datasets
+1. Tighten parity for `GRaSP`, `GIN`, `CAM_UV`, and `RCD`
+2. Keep approximation-heavy substitutions documented in code and docs
+3. Expand parity fixtures only when they close a concrete confidence gap
+4. Revisit runtime specialization only after the portable baseline is judged stable
