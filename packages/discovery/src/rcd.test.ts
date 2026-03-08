@@ -79,4 +79,27 @@ describe("rcd", () => {
     },
     15_000
   );
+
+  it(
+    "matches the seeded baseline when MLHSICR is enabled",
+    () => {
+      const data = new DenseMatrix(loadTxtMatrix("test_rcd_seed100_data.txt"));
+      const result = rcd({
+        data,
+        mlhsicr: true
+      });
+
+      expect(result.parents).toEqual([[1, 2], [2], [3], [], [0, 2], [0]]);
+      expect(result.ancestors).toEqual([
+        [1, 2, 3],
+        [2, 3],
+        [3],
+        [],
+        [0, 1, 2, 3],
+        [0, 1, 2, 3, 4]
+      ]);
+      expect(result.confoundedPairs).toEqual([]);
+    },
+    20_000
+  );
 });

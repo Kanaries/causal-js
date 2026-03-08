@@ -758,16 +758,13 @@ function hsicGammaPValueRows(
   return Math.max(0, Math.min(1, 1 - gammaCdf(testStatistic, shape, scale)));
 }
 
-function hsicScoreRows(
+function hsicScoreRowsWithCenteredGram(
   leftRows: readonly (readonly number[])[],
-  rightRows: readonly (readonly number[])[],
-  bwMethod: BandwidthMethod
+  rightCenteredGram: readonly (readonly number[])[],
+  width: number
 ): number {
-  const leftWidth = getKernelWidth(leftRows, bwMethod);
-  const rightWidth = getKernelWidth(rightRows, bwMethod);
-  const { centered: leftCentered } = getGramMatrix(leftRows, leftWidth);
-  const { centered: rightCentered } = getGramMatrix(rightRows, rightWidth);
-  return hsicStatistic(leftCentered, rightCentered, leftRows.length);
+  const { centered: leftCentered } = getGramMatrix(leftRows, width);
+  return hsicStatistic(leftCentered, rightCenteredGram, leftRows.length);
 }
 
 function selectColumns(rows: readonly (readonly number[])[], indices: readonly number[]): number[][] {
@@ -833,8 +830,7 @@ function fitResidualAndCoefficientsByMlhsicr(
   rows: readonly (readonly number[])[],
   endogIndex: number,
   exogIndices: readonly number[],
-  ridgePenalty: number,
-  bwMethod: BandwidthMethod
+  ridgePenalty: number
 ): { residuals: number[]; coefficients: number[] } {
   if (exogIndices.length === 0) {
     return { residuals: getColumn(rows, endogIndex), coefficients: [] };
@@ -842,12 +838,24 @@ function fitResidualAndCoefficientsByMlhsicr(
 
   const baseFit = fitResidualAndCoefficients(rows, endogIndex, exogIndices, ridgePenalty);
   const designColumns = exogIndices.map((index) => getColumn(rows, index).map((value) => [value]));
+  const widthList = designColumns.map((columnRows) => getMedianKernelWidth(columnRows));
+  const centeredGrams = designColumns.map((columnRows, index) =>
+    getGramMatrix(columnRows, widthList[index] ?? 1).centered
+  );
+  const targetColumn = getColumn(rows, endogIndex).map((value) => [value]);
+  const widthXi = getMedianKernelWidth(targetColumn);
 
   function objective(coefficients: readonly number[]): number {
     const residuals = residualsFromCoefficients(rows, endogIndex, exogIndices, coefficients);
     const residualRows = residuals.map((value) => [value]);
-    return designColumns.reduce(
-      (sum, columnRows) => sum + hsicScoreRows(residualRows, columnRows, bwMethod),
+    let width = widthXi;
+    for (let index = 0; index < coefficients.length; index += 1) {
+      width -= (coefficients[index] ?? 0) * (widthList[index] ?? 0);
+    }
+    width = Number.isFinite(width) && width > 1e-8 ? width : 1e-8;
+
+    return centeredGrams.reduce(
+      (sum, centeredGram) => sum + hsicScoreRowsWithCenteredGram(residualRows, centeredGram, width),
       0
     );
   }
@@ -981,8 +989,7 @@ function isIndependentOfResidual(
         rows,
         xi,
         xjList,
-        ridgePenalty,
-        bwMethod
+        ridgePenalty
       ).residuals;
       for (const retryXj of xjList) {
         if (

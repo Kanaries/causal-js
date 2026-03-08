@@ -451,39 +451,41 @@ def run_cases() -> list[dict[str, Any]]:
     )
 
     data_rcd = load_txt_matrix("test_rcd_seed100_data.txt")
-    for bw_method in ("mdbs", "scott", "silverman"):
-        append_case(
-            cases,
-            f"rcd.seed100.{bw_method}",
-            lambda bw_method=bw_method: (
-                lambda model_rcd: (
-                    lambda adjacency_rcd: make_case(
-                        f"rcd.seed100.{bw_method}",
-                        "rcd",
-                        {
-                            "data": {"rows": int(data_rcd.shape[0]), "columns": int(data_rcd.shape[1])},
-                            "maxExplanatoryNum": 2,
-                            "corAlpha": 0.01,
-                            "indAlpha": 0.01,
-                            "shapiroAlpha": 0.01,
-                            "mlhsicr": False,
-                            "bwMethod": bw_method,
-                        },
-                        {
-                            "nodeCount": int(data_rcd.shape[1]),
-                            "parentEntryCount": sum(1 for entry in rcd_parents_from_matrix(adjacency_rcd) if len(entry) > 0),
-                            "confoundedPairCount": len(rcd_confounders_from_matrix(adjacency_rcd)),
-                        },
-                        {
-                            "parents": rcd_parents_from_matrix(adjacency_rcd),
-                            "ancestors": normalize_clusters(model_rcd.ancestors_list_),
-                            "confoundedPairs": rcd_confounders_from_matrix(adjacency_rcd),
-                            "adjacencyMatrix": adjacency_matrix_to_jsonable(adjacency_rcd),
-                        },
-                    )
-                )(model_rcd.adjacency_matrix_)
-            )((lambda model: (model.fit(data_rcd), model)[1])(lingam.RCD(bw_method=bw_method)))
-        )
+    for mlhsicr in (False, True):
+        for bw_method in ("mdbs", "scott", "silverman"):
+            suffix = ".mlhsicr" if mlhsicr else ""
+            append_case(
+                cases,
+                f"rcd.seed100.{bw_method}{suffix}",
+                lambda bw_method=bw_method, mlhsicr=mlhsicr, suffix=suffix: (
+                    lambda model_rcd: (
+                        lambda adjacency_rcd: make_case(
+                            f"rcd.seed100.{bw_method}{suffix}",
+                            "rcd",
+                            {
+                                "data": {"rows": int(data_rcd.shape[0]), "columns": int(data_rcd.shape[1])},
+                                "maxExplanatoryNum": 2,
+                                "corAlpha": 0.01,
+                                "indAlpha": 0.01,
+                                "shapiroAlpha": 0.01,
+                                "mlhsicr": mlhsicr,
+                                "bwMethod": bw_method,
+                            },
+                            {
+                                "nodeCount": int(data_rcd.shape[1]),
+                                "parentEntryCount": sum(1 for entry in rcd_parents_from_matrix(adjacency_rcd) if len(entry) > 0),
+                                "confoundedPairCount": len(rcd_confounders_from_matrix(adjacency_rcd)),
+                            },
+                            {
+                                "parents": rcd_parents_from_matrix(adjacency_rcd),
+                                "ancestors": normalize_clusters(model_rcd.ancestors_list_),
+                                "confoundedPairs": rcd_confounders_from_matrix(adjacency_rcd),
+                                "adjacencyMatrix": adjacency_matrix_to_jsonable(adjacency_rcd),
+                            },
+                        )
+                    )(model_rcd.adjacency_matrix_)
+                )((lambda model: (model.fit(data_rcd), model)[1])(lingam.RCD(bw_method=bw_method, MLHSICR=mlhsicr)))
+            )
 
     return cases
 
