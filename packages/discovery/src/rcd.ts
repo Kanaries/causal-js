@@ -2,9 +2,11 @@ import { CausalGraph, EDGE_ENDPOINT, NODE_TYPE } from "@causal-js/core";
 
 import type { RcdOptions, RcdResult } from "./contracts";
 
+type BandwidthMethod = NonNullable<RcdOptions["bwMethod"]>;
+
 function createNodeLabels(variableCount: number, nodeLabels?: readonly string[]): string[] {
   if (!nodeLabels) {
-    return Array.from({ length: variableCount }, (_, index) => `X${index}`);
+    return Array.from({ length: variableCount }, (_, index) => `X${index + 1}`);
   }
 
   if (nodeLabels.length !== variableCount) {
@@ -155,15 +157,79 @@ function normalCdf(value: number): number {
   return 0.5 * (1 + erf);
 }
 
-function pearsonPValue(left: readonly number[], right: readonly number[]): number {
-  const r = Math.max(-0.999999, Math.min(0.999999, correlation(left, right)));
-  const n = left.length;
-  if (n <= 3) {
+function logBeta(a: number, b: number): number {
+  return logGamma(a) + logGamma(b) - logGamma(a + b);
+}
+
+function regularizedIncompleteBeta(a: number, b: number, x: number): number {
+  if (x <= 0) {
+    return 0;
+  }
+  if (x >= 1) {
     return 1;
   }
 
-  const z = Math.abs(r) * Math.sqrt(n - 3);
-  return 2 * (1 - normalCdf(z));
+  const useSymmetry = x > (a + 1) / (a + b + 2);
+  if (useSymmetry) {
+    return 1 - regularizedIncompleteBeta(b, a, 1 - x);
+  }
+
+  const front = Math.exp(a * Math.log(x) + b * Math.log(1 - x) - logBeta(a, b)) / a;
+
+  let c = 1;
+  let d = 1 - ((a + b) * x) / (a + 1);
+  if (Math.abs(d) < 1e-30) {
+    d = 1e-30;
+  }
+  d = 1 / d;
+  let fraction = d;
+
+  for (let iteration = 1; iteration <= 200; iteration += 1) {
+    const evenIndex = iteration * 2;
+    let numerator = (iteration * (b - iteration) * x) / ((a + evenIndex - 1) * (a + evenIndex));
+    d = 1 + numerator * d;
+    if (Math.abs(d) < 1e-30) {
+      d = 1e-30;
+    }
+    c = 1 + numerator / c;
+    if (Math.abs(c) < 1e-30) {
+      c = 1e-30;
+    }
+    d = 1 / d;
+    fraction *= d * c;
+
+    numerator = -((a + iteration) * (a + b + iteration) * x) / ((a + evenIndex) * (a + evenIndex + 1));
+    d = 1 + numerator * d;
+    if (Math.abs(d) < 1e-30) {
+      d = 1e-30;
+    }
+    c = 1 + numerator / c;
+    if (Math.abs(c) < 1e-30) {
+      c = 1e-30;
+    }
+    d = 1 / d;
+    const delta = d * c;
+    fraction *= delta;
+    if (Math.abs(delta - 1) < 1e-12) {
+      break;
+    }
+  }
+
+  return Math.max(0, Math.min(1, front * fraction));
+}
+
+function pearsonPValue(left: readonly number[], right: readonly number[]): number {
+  const r = Math.max(-0.999999, Math.min(0.999999, correlation(left, right)));
+  const n = left.length;
+  if (n <= 2) {
+    return 1;
+  }
+
+  const degreesOfFreedom = n - 2;
+  const denominator = Math.max(1 - r * r, 1e-12);
+  const tStatistic = Math.abs(r) * Math.sqrt(degreesOfFreedom / denominator);
+  const x = degreesOfFreedom / (degreesOfFreedom + tStatistic * tStatistic);
+  return Math.max(0, Math.min(1, regularizedIncompleteBeta(degreesOfFreedom / 2, 0.5, x)));
 }
 
 function jarqueBeraPValue(values: readonly number[]): number {
@@ -197,7 +263,23 @@ function median(values: readonly number[]): number {
   return sorted[center] ?? 0;
 }
 
-function getKernelWidth(rows: readonly (readonly number[])[]): number {
+function percentile(values: readonly number[], quantile: number): number {
+  const sorted = [...values].sort((left, right) => left - right);
+  if (sorted.length === 0) {
+    return 0;
+  }
+
+  const index = (sorted.length - 1) * quantile;
+  const lower = Math.floor(index);
+  const upper = Math.ceil(index);
+  if (lower === upper) {
+    return sorted[lower] ?? 0;
+  }
+  const weight = index - lower;
+  return (sorted[lower] ?? 0) * (1 - weight) + (sorted[upper] ?? 0) * weight;
+}
+
+function getMedianKernelWidth(rows: readonly (readonly number[])[]): number {
   const sample = rows.slice(0, Math.min(100, rows.length));
   const distances: number[] = [];
 
@@ -222,6 +304,68 @@ function getKernelWidth(rows: readonly (readonly number[])[]): number {
 
   const width = Math.sqrt(0.5 * median(distances));
   return Number.isFinite(width) && width > 0 ? width : 1;
+}
+
+function getScottKernelWidth(rows: readonly (readonly number[])[]): number {
+  const sampleSize = rows.length;
+  const dimension = rows[0]?.length ?? 0;
+  if (sampleSize <= 1 || dimension === 0) {
+    return 1;
+  }
+
+  const scales = Array.from({ length: dimension }, (_, index) => {
+    const values = rows.map((row) => row[index] ?? 0);
+    return std(values);
+  }).filter((value) => Number.isFinite(value) && value > 0);
+
+  if (scales.length === 0) {
+    return 1;
+  }
+
+  const sigma = mean(scales);
+  const factor = Math.pow(sampleSize, -1 / (dimension + 4));
+  const width = sigma * factor;
+  return Number.isFinite(width) && width > 0 ? width : 1;
+}
+
+function getSilvermanKernelWidth(rows: readonly (readonly number[])[]): number {
+  const sampleSize = rows.length;
+  const dimension = rows[0]?.length ?? 0;
+  if (sampleSize <= 1 || dimension === 0) {
+    return 1;
+  }
+
+  const scales = Array.from({ length: dimension }, (_, index) => {
+    const values = rows.map((row) => row[index] ?? 0);
+    const sigma = std(values);
+    const iqr = percentile(values, 0.75) - percentile(values, 0.25);
+    const robustSigma = Math.min(sigma, iqr / 1.34);
+    return robustSigma > 0 ? robustSigma : sigma;
+  }).filter((value) => Number.isFinite(value) && value > 0);
+
+  if (scales.length === 0) {
+    return 1;
+  }
+
+  const sigma = mean(scales);
+  const factor = Math.pow((sampleSize * (dimension + 2)) / 4, -1 / (dimension + 4));
+  const width = sigma * factor;
+  return Number.isFinite(width) && width > 0 ? width : 1;
+}
+
+function getKernelWidth(
+  rows: readonly (readonly number[])[],
+  bwMethod: BandwidthMethod
+): number {
+  switch (bwMethod) {
+    case "scott":
+      return getScottKernelWidth(rows);
+    case "silverman":
+      return getSilvermanKernelWidth(rows);
+    case "mdbs":
+    default:
+      return getMedianKernelWidth(rows);
+  }
 }
 
 function getGramMatrix(rows: readonly (readonly number[])[], width: number): { gram: number[][]; centered: number[][] } {
@@ -351,9 +495,13 @@ function gammaCdf(value: number, shape: number, scale: number): number {
   return regularizedGammaP(shape, value / scale);
 }
 
-function hsicGammaPValueRows(leftRows: readonly (readonly number[])[], rightRows: readonly (readonly number[])[]): number {
-  const leftWidth = getKernelWidth(leftRows);
-  const rightWidth = getKernelWidth(rightRows);
+function hsicGammaPValueRows(
+  leftRows: readonly (readonly number[])[],
+  rightRows: readonly (readonly number[])[],
+  bwMethod: BandwidthMethod
+): number {
+  const leftWidth = getKernelWidth(leftRows, bwMethod);
+  const rightWidth = getKernelWidth(rightRows, bwMethod);
   const { gram: leftGram, centered: leftCentered } = getGramMatrix(leftRows, leftWidth);
   const { gram: rightGram, centered: rightCentered } = getGramMatrix(rightRows, rightWidth);
   const sampleSize = leftRows.length;
@@ -403,6 +551,18 @@ function hsicGammaPValueRows(leftRows: readonly (readonly number[])[], rightRows
   return Math.max(0, Math.min(1, 1 - gammaCdf(testStatistic, shape, scale)));
 }
 
+function hsicScoreRows(
+  leftRows: readonly (readonly number[])[],
+  rightRows: readonly (readonly number[])[],
+  bwMethod: BandwidthMethod
+): number {
+  const leftWidth = getKernelWidth(leftRows, bwMethod);
+  const rightWidth = getKernelWidth(rightRows, bwMethod);
+  const { centered: leftCentered } = getGramMatrix(leftRows, leftWidth);
+  const { centered: rightCentered } = getGramMatrix(rightRows, rightWidth);
+  return hsicStatistic(leftCentered, rightCentered, leftRows.length);
+}
+
 function selectColumns(rows: readonly (readonly number[])[], indices: readonly number[]): number[][] {
   return rows.map((row) => indices.map((index) => row[index] ?? 0));
 }
@@ -427,17 +587,98 @@ function fitResidualAndCoefficients(
   const xtx = multiplyMatrices(xt, design);
   const xty = xt.map((row) => row.reduce((sum, value, rowIndex) => sum + value * (y[rowIndex] ?? 0), 0));
 
-  for (let index = 1; index < xtx.length; index += 1) {
-    xtx[index]![index]! += ridgePenalty;
+  let coefficients: number[];
+  try {
+    coefficients = solveLinearSystem(xtx, xty);
+  } catch (error) {
+    const fallbackPenalty = ridgePenalty > 0 ? ridgePenalty : 1e-8;
+    for (let index = 1; index < xtx.length; index += 1) {
+      xtx[index]![index]! += fallbackPenalty;
+    }
+    coefficients = solveLinearSystem(xtx, xty);
   }
-
-  const coefficients = solveLinearSystem(xtx, xty);
   const predictions = design.map((features) =>
     features.reduce((sum, value, index) => sum + value * (coefficients[index] ?? 0), 0)
   );
   return {
     residuals: y.map((value, index) => value - (predictions[index] ?? 0)),
     coefficients: coefficients.slice(1)
+  };
+}
+
+function residualsFromCoefficients(
+  rows: readonly (readonly number[])[],
+  endogIndex: number,
+  exogIndices: readonly number[],
+  coefficients: readonly number[]
+): number[] {
+  const y = getColumn(rows, endogIndex);
+  return rows.map((row, rowIndex) => {
+    let prediction = 0;
+    for (let index = 0; index < exogIndices.length; index += 1) {
+      prediction += (coefficients[index] ?? 0) * (row[exogIndices[index]!] ?? 0);
+    }
+    return (y[rowIndex] ?? 0) - prediction;
+  });
+}
+
+function fitResidualAndCoefficientsByMlhsicr(
+  rows: readonly (readonly number[])[],
+  endogIndex: number,
+  exogIndices: readonly number[],
+  ridgePenalty: number,
+  bwMethod: BandwidthMethod
+): { residuals: number[]; coefficients: number[] } {
+  if (exogIndices.length === 0) {
+    return { residuals: getColumn(rows, endogIndex), coefficients: [] };
+  }
+
+  const baseFit = fitResidualAndCoefficients(rows, endogIndex, exogIndices, ridgePenalty);
+  const designColumns = exogIndices.map((index) => getColumn(rows, index).map((value) => [value]));
+
+  function objective(coefficients: readonly number[]): number {
+    const residuals = residualsFromCoefficients(rows, endogIndex, exogIndices, coefficients);
+    const residualRows = residuals.map((value) => [value]);
+    return designColumns.reduce(
+      (sum, columnRows) => sum + hsicScoreRows(residualRows, columnRows, bwMethod),
+      0
+    );
+  }
+
+  const coefficients = [...baseFit.coefficients];
+  let bestScore = objective(coefficients);
+  let stepScale = Math.max(
+    0.1,
+    ...coefficients.map((value) => Math.max(Math.abs(value) * 0.5, 0.1))
+  );
+
+  for (let iteration = 0; iteration < 25 && stepScale > 1e-4; iteration += 1) {
+    let improved = false;
+    for (let coefficientIndex = 0; coefficientIndex < coefficients.length; coefficientIndex += 1) {
+      const current = coefficients[coefficientIndex] ?? 0;
+      for (const direction of [-1, 1] as const) {
+        coefficients[coefficientIndex] = current + direction * stepScale;
+        const candidateScore = objective(coefficients);
+        if (candidateScore + 1e-12 < bestScore) {
+          bestScore = candidateScore;
+          improved = true;
+          break;
+        }
+      }
+
+      if (!improved) {
+        coefficients[coefficientIndex] = current;
+      }
+    }
+
+    if (!improved) {
+      stepScale *= 0.5;
+    }
+  }
+
+  return {
+    residuals: residualsFromCoefficients(rows, endogIndex, exogIndices, coefficients),
+    coefficients
   };
 }
 
@@ -506,8 +747,13 @@ function existsAncestorInU(
   return others.every((other) => ownAncestors.has(other));
 }
 
-function isIndependent(left: readonly number[], right: readonly number[][], indAlpha: number): boolean {
-  return hsicGammaPValueRows(left.map((value) => [value]), right) > indAlpha;
+function isIndependent(
+  left: readonly number[],
+  right: readonly number[][],
+  indAlpha: number,
+  bwMethod: BandwidthMethod
+): boolean {
+  return hsicGammaPValueRows(left.map((value) => [value]), right, bwMethod) > indAlpha;
 }
 
 function isIndependentOfResidual(
@@ -515,12 +761,37 @@ function isIndependentOfResidual(
   xi: number,
   xjList: readonly number[],
   indAlpha: number,
-  ridgePenalty: number
+  ridgePenalty: number,
+  bwMethod: BandwidthMethod,
+  mlhsicr: boolean
 ): boolean {
-  const { residuals } = fitResidualAndCoefficients(rows, xi, xjList, ridgePenalty);
+  let { residuals } = fitResidualAndCoefficients(rows, xi, xjList, ridgePenalty);
   for (const xj of xjList) {
-    if (!isIndependent(residuals, getColumn(rows, xj).map((value) => [value]), indAlpha)) {
-      return false;
+    if (!isIndependent(residuals, getColumn(rows, xj).map((value) => [value]), indAlpha, bwMethod)) {
+      if (!mlhsicr || xjList.length <= 1) {
+        return false;
+      }
+
+      residuals = fitResidualAndCoefficientsByMlhsicr(
+        rows,
+        xi,
+        xjList,
+        ridgePenalty,
+        bwMethod
+      ).residuals;
+      for (const retryXj of xjList) {
+        if (
+          !isIndependent(
+            residuals,
+            getColumn(rows, retryXj).map((value) => [value]),
+            indAlpha,
+            bwMethod
+          )
+        ) {
+          return false;
+        }
+      }
+      return true;
     }
   }
   return true;
@@ -532,7 +803,9 @@ function extractAncestors(
   corAlpha: number,
   indAlpha: number,
   shapiroAlpha: number,
-  ridgePenalty: number
+  ridgePenalty: number,
+  bwMethod: BandwidthMethod,
+  mlhsicr: boolean
 ): Set<number>[] {
   const featureCount = rows[0]?.length ?? 0;
   const ancestors = Array.from({ length: featureCount }, () => new Set<number>());
@@ -584,7 +857,17 @@ function extractAncestors(
           continue;
         }
 
-        if (isIndependentOfResidual(residualMatrix, xi, xjList, indAlpha, ridgePenalty)) {
+        if (
+          isIndependentOfResidual(
+            residualMatrix,
+            xi,
+            xjList,
+            indAlpha,
+            ridgePenalty,
+            bwMethod,
+            mlhsicr
+          )
+        ) {
           sinkSet.push(xi);
         }
       }
@@ -759,7 +1042,9 @@ export function rcd(options: RcdOptions): RcdResult {
   const corAlpha = options.corAlpha ?? 0.01;
   const indAlpha = options.indAlpha ?? 0.01;
   const shapiroAlpha = options.shapiroAlpha ?? 0.01;
-  const ridgePenalty = options.ridgePenalty ?? 1e-6;
+  const mlhsicr = options.mlhsicr ?? false;
+  const bwMethod = options.bwMethod ?? "mdbs";
+  const ridgePenalty = options.ridgePenalty ?? 0;
 
   const ancestors = extractAncestors(
     rows,
@@ -767,7 +1052,9 @@ export function rcd(options: RcdOptions): RcdResult {
     corAlpha,
     indAlpha,
     shapiroAlpha,
-    ridgePenalty
+    ridgePenalty,
+    bwMethod,
+    mlhsicr
   );
   const parents = extractParents(rows, ancestors, corAlpha, ridgePenalty);
   const confounded = extractVarsSharingConfounders(rows, parents, corAlpha, ridgePenalty);

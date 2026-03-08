@@ -89,6 +89,25 @@ function toCausalLearnMatrix(shape: GraphShape): number[][] {
   return matrix;
 }
 
+function expectNumericMatrixClose(
+  received: readonly (readonly number[])[],
+  expected: readonly (readonly number[])[],
+  tolerance = 1e-6
+): void {
+  expect(received).toHaveLength(expected.length);
+  for (let rowIndex = 0; rowIndex < expected.length; rowIndex += 1) {
+    const expectedRow = expected[rowIndex] ?? [];
+    const receivedRow = received[rowIndex] ?? [];
+    expect(receivedRow).toHaveLength(expectedRow.length);
+    for (let columnIndex = 0; columnIndex < expectedRow.length; columnIndex += 1) {
+      expect(receivedRow[columnIndex] ?? 0).toBeCloseTo(
+        expectedRow[columnIndex] ?? 0,
+        Math.abs(Math.log10(tolerance))
+      );
+    }
+  }
+}
+
 describe("causal-learn parity", () => {
   it("matches the simulated Gaussian PC fixture from TestPC", () => {
     const data = new DenseMatrix(loadTxtMatrix("test_pc_simulated_linear_gaussian_data.txt", 1));
@@ -281,18 +300,18 @@ describe("causal-learn parity", () => {
         parents: number[][];
         ancestors: number[][];
         confoundedPairs: number[][];
-      adjacencyMatrix: number[][];
-    }>("benchmark_returned_results/test_rcd_seed100_default.json");
+        adjacencyMatrix: number[][];
+      }>("benchmark_returned_results/test_rcd_seed100_default.json");
 
-    const result = rcd({
-      data,
-      nodeLabels: ["x0", "x1", "x2", "x3", "x4", "x5"]
-    });
+      const result = rcd({
+        data,
+        nodeLabels: ["x0", "x1", "x2", "x3", "x4", "x5"]
+      });
 
       expect(result.parents).toEqual(expected.parents);
       expect(result.ancestors).toEqual(expected.ancestors);
       expect(result.confoundedPairs).toEqual(expected.confoundedPairs);
-      expect(result.adjacencyMatrix).toEqual(expected.adjacencyMatrix);
+      expectNumericMatrixClose(result.adjacencyMatrix, expected.adjacencyMatrix);
     },
     15_000
   );

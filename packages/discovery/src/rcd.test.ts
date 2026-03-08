@@ -63,4 +63,20 @@ describe("rcd", () => {
     },
     15_000
   );
+
+  it(
+    "uses causal-learn style default node labels and supports alternative bandwidth rules",
+    () => {
+      const data = new DenseMatrix(loadTxtMatrix("test_rcd_seed100_data.txt"));
+      const result = rcd({
+        data,
+        bwMethod: "scott"
+      });
+
+      expect(result.graph.nodes.map((node) => node.id)).toEqual(["X1", "X2", "X3", "X4", "X5", "X6"]);
+      expect(result.parents).toEqual([[1, 2], [2], [3], [], [0, 2], [0]]);
+      expect(result.confoundedPairs).toEqual([]);
+    },
+    15_000
+  );
 });

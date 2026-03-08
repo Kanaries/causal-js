@@ -459,38 +459,44 @@ function runJsCases(core, discovery) {
   );
 
   const rcdData = new DenseMatrix(loadTxtMatrix("test_rcd_seed100_data.txt"));
-  const rcdResult = rcd({
-    data: rcdData,
-    nodeLabels: createNodeLabels(rcdData.columns),
-    maxExplanatoryNum: 2,
-    corAlpha: 0.01,
-    indAlpha: 0.01,
-    shapiroAlpha: 0.01
-  });
-  cases.push(
-    makeCase(
-      "rcd.seed100",
-      "rcd",
-      {
-        data: { rows: rcdData.rows, columns: rcdData.columns },
-        maxExplanatoryNum: 2,
-        corAlpha: 0.01,
-        indAlpha: 0.01,
-        shapiroAlpha: 0.01
-      },
-      {
-        nodeCount: rcdData.columns,
-        parentEntryCount: rcdResult.parents.filter((entry) => entry.length > 0).length,
-        confoundedPairCount: rcdResult.confoundedPairs.length
-      },
-      {
-        parents: normalizeClusters(rcdResult.parents),
-        ancestors: normalizeClusters(rcdResult.ancestors),
-        confoundedPairs: normalizeClusters(rcdResult.confoundedPairs),
-        adjacencyMatrix: adjacencyMatrixToJsonable(rcdResult.adjacencyMatrix)
-      }
-    )
-  );
+  for (const bwMethod of ["mdbs", "scott", "silverman"]) {
+    const rcdResult = rcd({
+      data: rcdData,
+      nodeLabels: createNodeLabels(rcdData.columns),
+      maxExplanatoryNum: 2,
+      corAlpha: 0.01,
+      indAlpha: 0.01,
+      shapiroAlpha: 0.01,
+      mlhsicr: false,
+      bwMethod
+    });
+    cases.push(
+      makeCase(
+        `rcd.seed100.${bwMethod}`,
+        "rcd",
+        {
+          data: { rows: rcdData.rows, columns: rcdData.columns },
+          maxExplanatoryNum: 2,
+          corAlpha: 0.01,
+          indAlpha: 0.01,
+          shapiroAlpha: 0.01,
+          mlhsicr: false,
+          bwMethod
+        },
+        {
+          nodeCount: rcdData.columns,
+          parentEntryCount: rcdResult.parents.filter((entry) => entry.length > 0).length,
+          confoundedPairCount: rcdResult.confoundedPairs.length
+        },
+        {
+          parents: normalizeClusters(rcdResult.parents),
+          ancestors: normalizeClusters(rcdResult.ancestors),
+          confoundedPairs: normalizeClusters(rcdResult.confoundedPairs),
+          adjacencyMatrix: adjacencyMatrixToJsonable(rcdResult.adjacencyMatrix)
+        }
+      )
+    );
+  }
 
   return cases;
 }

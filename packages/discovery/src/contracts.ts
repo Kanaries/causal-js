@@ -76,6 +76,9 @@ export interface CamuvOptions {
   alpha?: number;
   maxExplanatoryVars?: number;
   nodeLabels?: readonly string[];
+  bwMethod?: "mdbs" | "scott" | "silverman";
+  smoother?: "spline" | "polynomial";
+  splineKnots?: number;
   polynomialDegree?: number;
   ridgePenalty?: number;
 }
@@ -87,6 +90,8 @@ export interface RcdOptions {
   corAlpha?: number;
   indAlpha?: number;
   shapiroAlpha?: number;
+  mlhsicr?: boolean;
+  bwMethod?: "mdbs" | "scott" | "silverman";
   ridgePenalty?: number;
 }
 
