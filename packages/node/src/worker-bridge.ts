@@ -27,6 +27,18 @@ function removeNodeWorkerListener(
   }
 }
 
+async function disposeNodeWorkerPort(port: NodeWorkerBridgeMessagePort): Promise<void> {
+  if (typeof port.terminate !== "function") {
+    return;
+  }
+
+  try {
+    await port.terminate();
+  } catch {
+    // Ignore teardown failures after the task has already settled.
+  }
+}
+
 export function createNodeWorkerBridge(factory: () => NodeWorkerBridgeMessagePort): NodeWorkerBridge {
   return {
     async runTask<TOptions, TResult>(algorithmId: string, options: TOptions): Promise<TResult> {
@@ -44,17 +56,19 @@ export function createNodeWorkerBridge(factory: () => NodeWorkerBridgeMessagePor
           removeNodeWorkerListener(port, "error", handleError);
 
           if (response.ok) {
-            resolve(response.result);
+            void disposeNodeWorkerPort(port).finally(() => resolve(response.result));
             return;
           }
 
-          reject(new Error(response.error.message));
+          void disposeNodeWorkerPort(port).finally(() => reject(new Error(response.error.message)));
         };
 
         const handleError = (error: unknown) => {
           removeNodeWorkerListener(port, "message", handleMessage);
           removeNodeWorkerListener(port, "error", handleError);
-          reject(error instanceof Error ? error : new Error(String(error)));
+          void disposeNodeWorkerPort(port).finally(() =>
+            reject(error instanceof Error ? error : new Error(String(error)))
+          );
         };
 
         port.on("message", handleMessage);

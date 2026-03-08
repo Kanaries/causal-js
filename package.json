@@ -10,6 +10,7 @@
     "clean": "pnpm -r clean",
     "compare:causal-learn": "node scripts/compare-causal-learn.cjs",
     "test": "vitest run",
+    "test:integration": "pnpm build && vitest run --config vitest.integration.config.ts",
     "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {

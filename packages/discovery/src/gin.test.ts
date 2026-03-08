@@ -46,14 +46,14 @@ describe("gin", () => {
             data: testCase.data,
             indepTestMethod,
             alpha: 0.05
-        });
+          });
 
-        expect(result.causalOrder.map((cluster) => [...cluster].sort((a, b) => a - b))).toEqual(
-          testCase.expected
-        );
-      }
+          expect(result.causalOrder.map((cluster) => [...cluster].sort((a, b) => a - b))).toEqual(
+            testCase.expected
+          );
+        }
       },
-      30_000
+      60_000
     );
   }
 

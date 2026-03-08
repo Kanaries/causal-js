@@ -30,6 +30,18 @@ function removeWebWorkerListener(
   }
 }
 
+async function disposeWebWorkerPort(port: WebWorkerBridgeMessagePort): Promise<void> {
+  if (typeof port.terminate !== "function") {
+    return;
+  }
+
+  try {
+    await port.terminate();
+  } catch {
+    // Ignore teardown failures after the task has already settled.
+  }
+}
+
 export function createWebWorkerBridge(factory: () => WebWorkerBridgeMessagePort): WebWorkerBridge {
   return {
     async runTask<TOptions, TResult>(algorithmId: string, options: TOptions): Promise<TResult> {
@@ -47,17 +59,19 @@ export function createWebWorkerBridge(factory: () => WebWorkerBridgeMessagePort)
           removeWebWorkerListener(port, "error", handleError);
 
           if (response.ok) {
-            resolve(response.result);
+            void disposeWebWorkerPort(port).finally(() => resolve(response.result));
             return;
           }
 
-          reject(new Error(response.error.message));
+          void disposeWebWorkerPort(port).finally(() => reject(new Error(response.error.message)));
         };
 
         const handleError = (event: { data?: unknown }) => {
           removeWebWorkerListener(port, "message", handleMessage);
           removeWebWorkerListener(port, "error", handleError);
-          reject(event.data instanceof Error ? event.data : new Error(String(event.data)));
+          void disposeWebWorkerPort(port).finally(() =>
+            reject(event.data instanceof Error ? event.data : new Error(String(event.data)))
+          );
         };
 
         port.addEventListener("message", handleMessage);

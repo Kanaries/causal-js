@@ -11,6 +11,7 @@ class FakeNodeWorkerPort implements NodeWorkerBridgeMessagePort {
     ["message", new Set()],
     ["error", new Set()]
   ]);
+  terminated = 0;
 
   postMessage(message: unknown): void {
     const task = message as { id: string; algorithmId: string; options: { alpha: number } };
@@ -38,6 +39,10 @@ class FakeNodeWorkerPort implements NodeWorkerBridgeMessagePort {
     this.listeners.get(event)?.delete(listener);
   }
 
+  async terminate(): Promise<void> {
+    this.terminated += 1;
+  }
+
   private emit(event: "message" | "error", value: unknown): void {
     for (const listener of this.listeners.get(event) ?? []) {
       listener(value);
@@ -47,20 +52,24 @@ class FakeNodeWorkerPort implements NodeWorkerBridgeMessagePort {
 
 describe("createNodeWorkerBridge", () => {
   it("round-trips a worker task through the bridge", async () => {
-    const bridge = createNodeWorkerBridge(() => new FakeNodeWorkerPort());
+    const port = new FakeNodeWorkerPort();
+    const bridge = createNodeWorkerBridge(() => port);
 
     await expect(bridge.runTask("pc", { alpha: 0.05 })).resolves.toEqual({
       mode: "worker",
       alpha: 0.05
     });
+    expect(port.terminated).toBe(1);
   });
 
   it("surfaces worker-side failures as errors", async () => {
-    const bridge = createNodeWorkerBridge(() => new FakeNodeWorkerPort());
+    const port = new FakeNodeWorkerPort();
+    const bridge = createNodeWorkerBridge(() => port);
 
     await expect(bridge.runTask("ges", { alpha: 0.05 })).rejects.toThrow(
       "Unsupported algorithm ges"
     );
+    expect(port.terminated).toBe(1);
   });
 
   it("wraps a worker constructor into the same bridge contract", async () => {
