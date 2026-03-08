@@ -37,4 +37,22 @@ describe("camuv", () => {
     },
     15_000
   );
+
+  it(
+    "keeps parity on the additive spline backfitting path",
+    () => {
+      const data = new DenseMatrix(loadTxtMatrix("test_camuv_seed42_data.txt"));
+      const result = camuv({
+        data,
+        alpha: 0.01,
+        maxExplanatoryVars: 3,
+        smoother: "spline",
+        splineKnots: 6
+      });
+
+      expect(result.parents).toEqual([[], [0], [], [0], [2], [2]]);
+      expect(result.confoundedPairs).toEqual([[3, 4]]);
+    },
+    15_000
+  );
 });

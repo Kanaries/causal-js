@@ -79,6 +79,8 @@ export interface CamuvOptions {
   bwMethod?: "mdbs" | "scott" | "silverman";
   smoother?: "spline" | "polynomial";
   splineKnots?: number;
+  gamMaxIterations?: number;
+  gamTolerance?: number;
   polynomialDegree?: number;
   ridgePenalty?: number;
 }

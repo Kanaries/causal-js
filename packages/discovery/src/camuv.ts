@@ -516,6 +516,34 @@ function buildSplineDesignMatrix(
   });
 }
 
+function centerVector(values: readonly number[]): number[] {
+  const avg = values.reduce((sum, value) => sum + value, 0) / values.length;
+  return values.map((value) => value - avg);
+}
+
+function fitFittedValuesFromDesign(
+  design: readonly (readonly number[])[],
+  y: readonly number[],
+  ridgePenalty: number
+): number[] {
+  const xt = transpose(design);
+  const xtx = multiplyMatrices(xt, design);
+  const xty = xt.map((row) => row.reduce((sum, value, rowIndex) => sum + value * (y[rowIndex] ?? 0), 0));
+
+  for (let index = 0; index < xtx.length; index += 1) {
+    xtx[index]![index]! += ridgePenalty;
+  }
+
+  const coefficients = solveLinearSystem(xtx, xty);
+  return design.map((features) => {
+    let prediction = 0;
+    for (let index = 0; index < features.length; index += 1) {
+      prediction += (features[index] ?? 0) * (coefficients[index] ?? 0);
+    }
+    return prediction;
+  });
+}
+
 function fitResidualFromDesign(
   design: readonly (readonly number[])[],
   y: readonly number[],
@@ -537,6 +565,67 @@ function fitResidualFromDesign(
     }
     return (y[rowIndex] ?? 0) - prediction;
   });
+}
+
+function fitSplineBackfittingResidual(
+  rows: readonly (readonly number[])[],
+  explainedIndex: number,
+  explanatoryIds: readonly number[],
+  splineKnots: number,
+  ridgePenalty: number,
+  gamMaxIterations: number,
+  gamTolerance: number
+): number[] {
+  if (explanatoryIds.length === 0) {
+    return getColumn(rows, explainedIndex);
+  }
+
+  const y = getColumn(rows, explainedIndex);
+  const intercept = y.reduce((sum, value) => sum + value, 0) / y.length;
+  const centeredTarget = y.map((value) => value - intercept);
+  const termDesigns = explanatoryIds.map((explanatoryId) =>
+    buildSplineDesignMatrix(rows, [explanatoryId], splineKnots).map((features) => features.slice(1))
+  );
+  const smoothTerms = termDesigns.map(() => Array.from({ length: rows.length }, () => 0));
+  const aggregate = Array.from({ length: rows.length }, () => 0);
+  const smoothingPenalty = ridgePenalty > 0 ? ridgePenalty : 1e-8;
+
+  for (let iteration = 0; iteration < gamMaxIterations; iteration += 1) {
+    let maxDelta = 0;
+
+    for (let termIndex = 0; termIndex < termDesigns.length; termIndex += 1) {
+      const currentTerm = smoothTerms[termIndex]!;
+      const partial = centeredTarget.map(
+        (value, rowIndex) => value - ((aggregate[rowIndex] ?? 0) - (currentTerm[rowIndex] ?? 0))
+      );
+      const fitted = centerVector(
+        fitFittedValuesFromDesign(termDesigns[termIndex]!, partial, smoothingPenalty)
+      );
+
+      for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+        const previous = currentTerm[rowIndex] ?? 0;
+        const nextValue = fitted[rowIndex] ?? 0;
+        const delta = Math.abs(nextValue - previous);
+        if (delta > maxDelta) {
+          maxDelta = delta;
+        }
+        currentTerm[rowIndex] = nextValue;
+      }
+    }
+
+    aggregate.fill(0);
+    for (const term of smoothTerms) {
+      for (let rowIndex = 0; rowIndex < term.length; rowIndex += 1) {
+        aggregate[rowIndex] = (aggregate[rowIndex] ?? 0) + (term[rowIndex] ?? 0);
+      }
+    }
+
+    if (maxDelta <= gamTolerance) {
+      break;
+    }
+  }
+
+  return y.map((value, rowIndex) => value - intercept - (aggregate[rowIndex] ?? 0));
 }
 
 function fitAdditivePolynomialResidual(
@@ -563,15 +652,26 @@ function fitAdditiveSplineResidual(
   explainedIndex: number,
   explanatoryIds: readonly number[],
   splineKnots: number,
-  ridgePenalty: number
+  ridgePenalty: number,
+  gamMaxIterations: number,
+  gamTolerance: number
 ): number[] {
   if (explanatoryIds.length === 0) {
     return getColumn(rows, explainedIndex);
   }
 
-  const design = buildSplineDesignMatrix(rows, explanatoryIds, splineKnots);
-  const y = getColumn(rows, explainedIndex);
-  return fitResidualFromDesign(design, y, ridgePenalty);
+  // This is intentionally closer to `pygam.LinearGAM` than the previous single-shot
+  // basis regression: each explanatory variable gets its own smooth term and the
+  // final fit is computed with additive backfitting.
+  return fitSplineBackfittingResidual(
+    rows,
+    explainedIndex,
+    explanatoryIds,
+    splineKnots,
+    ridgePenalty,
+    gamMaxIterations,
+    gamTolerance
+  );
 }
 
 function fitAdditiveResidual(
@@ -580,6 +680,8 @@ function fitAdditiveResidual(
   explanatoryIds: readonly number[],
   smoother: CamuvSmoother,
   splineKnots: number,
+  gamMaxIterations: number,
+  gamTolerance: number,
   polynomialDegree: number,
   ridgePenalty: number
 ): number[] {
@@ -593,7 +695,15 @@ function fitAdditiveResidual(
     );
   }
 
-  return fitAdditiveSplineResidual(rows, explainedIndex, explanatoryIds, splineKnots, ridgePenalty);
+  return fitAdditiveSplineResidual(
+    rows,
+    explainedIndex,
+    explanatoryIds,
+    splineKnots,
+    ridgePenalty,
+    gamMaxIterations,
+    gamTolerance
+  );
 }
 
 function checkIdentifiedCausality(variables: readonly number[], parents: readonly Set<number>[]): boolean {
@@ -625,6 +735,8 @@ function getResidualsMatrix(
   child: number,
   smoother: CamuvSmoother,
   splineKnots: number,
+  gamMaxIterations: number,
+  gamTolerance: number,
   polynomialDegree: number,
   ridgePenalty: number
 ): number[][] {
@@ -635,6 +747,8 @@ function getResidualsMatrix(
     [...(parents[child] ?? [])],
     smoother,
     splineKnots,
+    gamMaxIterations,
+    gamTolerance,
     polynomialDegree,
     ridgePenalty
   );
@@ -654,6 +768,8 @@ function getChild(
   bwMethod: BandwidthMethod,
   smoother: CamuvSmoother,
   splineKnots: number,
+  gamMaxIterations: number,
+  gamTolerance: number,
   polynomialDegree: number,
   ridgePenalty: number
 ): { child: number | undefined; independence: number } {
@@ -672,6 +788,8 @@ function getChild(
       [...candidateParents, ...[...(parents[child] ?? [])]],
       smoother,
       splineKnots,
+      gamMaxIterations,
+      gamTolerance,
       polynomialDegree,
       ridgePenalty
     );
@@ -733,6 +851,8 @@ function findParents(
   bwMethod: BandwidthMethod,
   smoother: CamuvSmoother,
   splineKnots: number,
+  gamMaxIterations: number,
+  gamTolerance: number,
   polynomialDegree: number,
   ridgePenalty: number
 ): Set<number>[] {
@@ -759,6 +879,8 @@ function findParents(
         bwMethod,
         smoother,
         splineKnots,
+        gamMaxIterations,
+        gamTolerance,
         polynomialDegree,
         ridgePenalty
       );
@@ -783,6 +905,8 @@ function findParents(
         child,
         smoother,
         splineKnots,
+        gamMaxIterations,
+        gamTolerance,
         polynomialDegree,
         ridgePenalty
       );
@@ -809,6 +933,8 @@ function findParents(
         reducedParents,
         smoother,
         splineKnots,
+        gamMaxIterations,
+        gamTolerance,
         polynomialDegree,
         ridgePenalty
       );
@@ -818,6 +944,8 @@ function findParents(
         [...(parents[parent] ?? [])],
         smoother,
         splineKnots,
+        gamMaxIterations,
+        gamTolerance,
         polynomialDegree,
         ridgePenalty
       );
@@ -842,7 +970,9 @@ export function camuv(options: CamuvOptions): CamuvResult {
   const maxExplanatoryVars = options.maxExplanatoryVars ?? 3;
   const bwMethod = options.bwMethod ?? "mdbs";
   const smoother = options.smoother ?? "spline";
-  const splineKnots = options.splineKnots ?? 5;
+  const splineKnots = options.splineKnots ?? 6;
+  const gamMaxIterations = options.gamMaxIterations ?? 25;
+  const gamTolerance = options.gamTolerance ?? 1e-5;
   const polynomialDegree = options.polynomialDegree ?? 3;
   const ridgePenalty = options.ridgePenalty ?? 1e-6;
   const nodeLabels = createNodeLabels(variableCount, options.nodeLabels);
@@ -856,6 +986,8 @@ export function camuv(options: CamuvOptions): CamuvResult {
     bwMethod,
     smoother,
     splineKnots,
+    gamMaxIterations,
+    gamTolerance,
     polynomialDegree,
     ridgePenalty
   );
@@ -876,6 +1008,8 @@ export function camuv(options: CamuvOptions): CamuvResult {
         [...(parents[left] ?? [])],
         smoother,
         splineKnots,
+        gamMaxIterations,
+        gamTolerance,
         polynomialDegree,
         ridgePenalty
       );
@@ -885,6 +1019,8 @@ export function camuv(options: CamuvOptions): CamuvResult {
         [...(parents[right] ?? [])],
         smoother,
         splineKnots,
+        gamMaxIterations,
+        gamTolerance,
         polynomialDegree,
         ridgePenalty
       );
