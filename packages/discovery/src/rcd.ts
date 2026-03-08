@@ -145,18 +145,6 @@ function correlation(left: readonly number[], right: readonly number[]): number 
   return covariance(left, right) / (leftStd * rightStd);
 }
 
-function normalCdf(value: number): number {
-  const sign = value < 0 ? -1 : 1;
-  const x = Math.abs(value) / Math.sqrt(2);
-  const t = 1 / (1 + 0.3275911 * x);
-  const polynomial =
-    (((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t +
-      0.254829592) *
-      t);
-  const erf = sign * (1 - polynomial * Math.exp(-x * x));
-  return 0.5 * (1 + erf);
-}
-
 function logBeta(a: number, b: number): number {
   return logGamma(a) + logGamma(b) - logGamma(a + b);
 }
@@ -232,26 +220,245 @@ function pearsonPValue(left: readonly number[], right: readonly number[]): numbe
   return Math.max(0, Math.min(1, regularizedIncompleteBeta(degreesOfFreedom / 2, 0.5, x)));
 }
 
-function jarqueBeraPValue(values: readonly number[]): number {
-  const avg = mean(values);
-  const sigma = std(values);
-  if (sigma === 0) {
+function alnorm(x: number, upper: boolean): number {
+  const ltone = 7;
+  const utzero = 38;
+  const con = 1.28;
+  const A1 = 0.398942280444;
+  const A2 = 0.399903438504;
+  const A3 = 5.75885480458;
+  const A4 = 29.8213557808;
+  const A5 = 2.62433121679;
+  const A6 = 48.6959930692;
+  const A7 = 5.92885724438;
+  const B1 = 0.398942280385;
+  const B2 = 3.8052e-8;
+  const B3 = 1.00000615302;
+  const B4 = 3.98064794e-4;
+  const B5 = 1.98615381364;
+  const B6 = 0.151679116635;
+  const B7 = 5.29330324926;
+  const B8 = 4.8385912808;
+  const B9 = 15.1508972451;
+  const B10 = 0.742380924027;
+  const B11 = 30.789933034;
+  const B12 = 3.99019417011;
+
+  let z = x;
+  let upperTail = upper;
+  if (!(z > 0)) {
+    upperTail = false;
+    z = -z;
+  }
+
+  if (!(z <= ltone || (upperTail && z <= utzero))) {
+    return upperTail ? 0 : 1;
+  }
+
+  const y = 0.5 * z * z;
+  let tailArea: number;
+  if (z <= con) {
+    tailArea =
+      0.5 -
+      z * (A1 - (A2 * y) / (y + A3 - A4 / (y + A5 + A6 / (y + A7))));
+  } else {
+    tailArea =
+      (B1 * Math.exp(-y)) /
+      (z -
+        B2 +
+        B3 /
+          (z + B4 + B5 / (z - B6 + B7 / (z + B8 - B9 / (z + B10 + B11 / (z + B12))))));
+  }
+
+  return upperTail ? tailArea : 1 - tailArea;
+}
+
+function ppnd(p: number): number {
+  const split = 0.42;
+  const A0 = 2.50662823884;
+  const A1 = -18.61500062529;
+  const A2 = 41.39119773534;
+  const A3 = -25.44106049637;
+  const B1 = -8.4735109309;
+  const B2 = 23.08336743743;
+  const B3 = -21.06224101826;
+  const B4 = 3.13082909833;
+  const C0 = -2.78718931138;
+  const C1 = -2.29796479134;
+  const C2 = 4.85014127135;
+  const C3 = 2.32121276858;
+  const D1 = 3.54388924762;
+  const D2 = 1.63706781897;
+
+  const q = p - 0.5;
+  if (Math.abs(q) <= split) {
+    const r = q * q;
+    return (
+      (q * (((A3 * r + A2) * r + A1) * r + A0)) /
+      ((((B4 * r + B3) * r + B2) * r + B1) * r + 1)
+    );
+  }
+
+  let r = q > 0 ? 1 - p : p;
+  if (!(r > 0)) {
+    return 0;
+  }
+
+  r = Math.sqrt(-Math.log(r));
+  const value = (((C3 * r + C2) * r + C1) * r + C0) / ((D2 * r + D1) * r + 1);
+  return q < 0 ? -value : value;
+}
+
+function poly(coefficients: readonly number[], x: number): number {
+  let result = coefficients[0] ?? 0;
+  if (coefficients.length === 1) {
+    return result;
+  }
+
+  let p = x * (coefficients[coefficients.length - 1] ?? 0);
+  if (coefficients.length === 2) {
+    return result + p;
+  }
+
+  for (let index = coefficients.length - 2; index >= 1; index -= 1) {
+    p = (p + (coefficients[index] ?? 0)) * x;
+  }
+  result += p;
+  return result;
+}
+
+function shapiroWilkPValue(values: readonly number[]): number {
+  const n = values.length;
+  if (n < 3) {
     return 1;
   }
 
-  let skew = 0;
-  let kurtosis = 0;
-  for (const value of values) {
-    const normalized = (value - avg) / sigma;
-    skew += normalized ** 3;
-    kurtosis += normalized ** 4;
-  }
-  skew /= values.length;
-  kurtosis /= values.length;
+  const c1 = [0, 0.221157, -0.147981, -2.07119, 4.434685, -2.706056];
+  const c2 = [0, 0.042981, -0.293762, -1.752461, 5.682633, -3.582633];
+  const c3 = [0.544, -0.39978, 0.025054, -0.0006714];
+  const c4 = [1.3822, -0.77857, 0.062767, -0.0020322];
+  const c5 = [-1.5861, -0.31082, -0.083751, 0.0038915];
+  const c6 = [-0.4803, -0.082676, 0.0030302];
+  const g = [-2.273, 0.459];
+  const sqrtHalf = Math.SQRT2 / 2;
+  const pi6 = 6 / Math.PI;
+  const small = 1e-19;
 
-  const jb = (values.length / 6) * (skew * skew + ((kurtosis - 3) * (kurtosis - 3)) / 4);
-  // Chi-square with df=2 has survival function exp(-x/2).
-  return Math.exp(-jb / 2);
+  const half = Math.floor(n / 2);
+  const a = Array.from({ length: half }, () => 0);
+
+  if (n === 3) {
+    a[0] = sqrtHalf;
+  } else {
+    const an25 = n + 0.25;
+    let summ2 = 0;
+    for (let index = 0; index < half; index += 1) {
+      const value = ppnd((index + 1 - 0.375) / an25);
+      a[index] = value;
+      summ2 += value * value;
+    }
+
+    summ2 *= 2;
+    const ssumm2 = Math.sqrt(summ2);
+    const rsn = 1 / Math.sqrt(n);
+    const a1 = poly(c1, rsn) - (a[0] ?? 0) / ssumm2;
+    let startIndex: number;
+    let fac: number;
+
+    if (n > 5) {
+      const a2 = -(a[1] ?? 0) / ssumm2 + poly(c2, rsn);
+      fac = Math.sqrt(
+        (summ2 - 2 * (a[0] ?? 0) ** 2 - 2 * (a[1] ?? 0) ** 2) /
+          (1 - 2 * a1 * a1 - 2 * a2 * a2)
+      );
+      a[1] = a2;
+      startIndex = 2;
+    } else {
+      fac = Math.sqrt((summ2 - 2 * (a[0] ?? 0) ** 2) / (1 - 2 * a1 * a1));
+      startIndex = 1;
+    }
+
+    a[0] = a1;
+    for (let index = startIndex; index < half; index += 1) {
+      a[index] = -(a[index] ?? 0) / fac;
+    }
+  }
+
+  const sorted = [...values].sort((left, right) => left - right);
+  const centered = sorted.map((value) => value - (sorted[Math.floor(n / 2)] ?? 0));
+  const range = (centered[n - 1] ?? 0) - (centered[0] ?? 0);
+  if (range < small) {
+    return 1;
+  }
+
+  let sx = (centered[0] ?? 0) / range;
+  let sa = -(a[0] ?? 0);
+  let mirrorIndex = n - 2;
+  for (let index = 1; index < n; index += 1) {
+    const xi = (centered[index] ?? 0) / range;
+    sx += xi;
+    if (index !== mirrorIndex) {
+      sa += (index < mirrorIndex ? -1 : 1) * (a[Math.min(index, mirrorIndex)] ?? 0);
+    }
+    mirrorIndex -= 1;
+  }
+
+  sa /= n;
+  sx /= n;
+
+  let ssa = 0;
+  let ssx = 0;
+  let sax = 0;
+  mirrorIndex = n - 1;
+  for (let index = 0; index < n; index += 1) {
+    const asa =
+      index !== mirrorIndex
+        ? (index < mirrorIndex ? -1 : 1) * (a[Math.min(index, mirrorIndex)] ?? 0) - sa
+        : -sa;
+    const xsx = (centered[index] ?? 0) / range - sx;
+    ssa += asa * asa;
+    ssx += xsx * xsx;
+    sax += asa * xsx;
+    mirrorIndex -= 1;
+  }
+
+  const ssassx = Math.sqrt(ssa * ssx);
+  if (!(ssassx > 0)) {
+    return 1;
+  }
+
+  const w1 = ((ssassx - sax) * (ssassx + sax)) / (ssa * ssx);
+  const w = 1 - w1;
+
+  if (n === 3) {
+    if (w < 0.75) {
+      return 0;
+    }
+    return Math.max(0, Math.min(1, 1 - pi6 * Math.acos(Math.sqrt(w))));
+  }
+
+  const logN = Math.log(n);
+  if (!(w1 > 0)) {
+    return small;
+  }
+
+  let y = Math.log(w1);
+  let m: number;
+  let s: number;
+  if (n <= 11) {
+    const gamma = poly(g, n);
+    if (y >= gamma) {
+      return small;
+    }
+    y = -Math.log(gamma - y);
+    m = poly(c3, n);
+    s = Math.exp(poly(c4, n));
+  } else {
+    m = poly(c5, logN);
+    s = Math.exp(poly(c6, logN));
+  }
+
+  return Math.max(0, Math.min(1, alnorm((y - m) / s, true)));
 }
 
 function median(values: readonly number[]): number {
@@ -723,9 +930,7 @@ function getResidualMatrix(
 }
 
 function isNonGaussianity(rows: readonly (readonly number[])[], variables: readonly number[], shapiroAlpha: number): boolean {
-  // v1 approximation: causal-learn uses SciPy's Shapiro-Wilk test. We replace it with
-  // a Jarque-Bera normality test so the baseline remains portable in Node and browser.
-  return variables.every((variable) => jarqueBeraPValue(getColumn(rows, variable)) < shapiroAlpha);
+  return variables.every((variable) => shapiroWilkPValue(getColumn(rows, variable)) < shapiroAlpha);
 }
 
 function isCorrelated(left: readonly number[], right: readonly number[], corAlpha: number): boolean {
