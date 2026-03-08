@@ -37,9 +37,16 @@ The first requested algorithm wave is now runnable:
 - `CAM_UV`
 - `RCD`
 
-These algorithms are not all at the same maturity level. Some are already
-aligned on selected `causal-learn` fixtures, while others are portable
-approximations with explicit parity gaps.
+This baseline has now passed the current V1 acceptance run:
+
+- `pnpm typecheck`
+- `pnpm build`
+- `pnpm test`
+- `pnpm test:integration`
+- `pnpm compare:causal-learn`
+
+The current cross-language comparison suite passes `30/30` cases against
+`causal-learn`.
 
 ## V1 Status
 
@@ -53,13 +60,13 @@ Current algorithm status:
 | `ExactSearch` | selected-path parity |
 | `GIN` | selected-path parity |
 | `GRaSP` | selected-path parity |
-| `CAM_UV` | seeded-fixture parity, smoother approximation |
-| `RCD` | seeded-fixture parity, test-stat approximation |
+| `CAM_UV` | selected-fixture parity, accepted portable smoother boundary |
+| `RCD` | selected-path parity |
 
 The practical meaning is:
 
-- `PC`, `CD_NOD`, `GES`, `ExactSearch`, `GIN`, and `GRaSP` are already locked to deterministic parity fixtures
-- `CAM_UV` and `RCD` are aligned on seeded official paths, but still keep portable substitutions in some statistical internals
+- `PC`, `CD_NOD`, `GES`, `ExactSearch`, `GIN`, `GRaSP`, and `RCD` are now covered by the current V1 parity and comparison baseline
+- `CAM_UV` is accepted for V1 on the current comparison suite, while still keeping a portable smoother instead of a literal `pygam.LinearGAM` dependency
 
 See [v1-status.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/v1-status.md) for the exact boundaries.
 
@@ -72,7 +79,7 @@ Current package roles:
 - `@causal-js/node`: Node-oriented facade; currently re-exports the portable surface and runtime metadata
 - `@causal-js/web`: browser-oriented facade; currently re-exports the portable surface and runtime metadata
 
-At the current v1 stage, `@causal-js/node` and `@causal-js/web` intentionally overlap a lot. Runtime-specific divergence has not been expanded yet.
+At the current v1 stage, `@causal-js/node` and `@causal-js/web` intentionally overlap a lot. Runtime-specific divergence is still limited to runtime capability probes, execution planning, and worker-adapter scaffolding.
 
 ## Usage
 
@@ -220,15 +227,15 @@ console.log(isWebAlgorithmSupported("calm"));
 
 ## Current Boundaries
 
-The current v1 surface is intentionally narrower than full `causal-learn`:
+The accepted V1 surface is intentionally narrower than full `causal-learn`:
 
-- `PC`: committed path is `stable=true`, `uc_rule=0`, `uc_priority=2`
-- `GES`: committed path is continuous Gaussian data with `GaussianBicScore`
+- `PC`: parity is covered on the selected `Fisher-Z`, `Chi-square`, and `G-square` paths
+- `GES`: parity is covered on selected `GaussianBicScore` and `BDeuScore` paths
 - `CD_NOD`: committed path is deterministic domain-varying `Fisher-Z`
 - `ExactSearch`: committed path is Gaussian exact DAG search
 - `GIN`: includes standalone unconditional `kci`, not conditional-kernel discovery
-- `CAM_UV`: portable regression smoother, not `pygam.LinearGAM`
-- `RCD`: portable normality and regression approximations remain in place
+- `CAM_UV`: accepted V1 smoother is portable additive spline backfitting, not `pygam.LinearGAM`
+- `RCD`: accepted V1 optimizer is portable numeric MLHSICR, not SciPy `fmin_l_bfgs_b`
 
 See:
 

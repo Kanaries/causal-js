@@ -1,9 +1,19 @@
 # V1 Status
 
-Last updated: 2026-03-07
+Last updated: 2026-03-08
 
 This document records the current `causal-js` baseline against `causal-learn`.
-It is intentionally strict about the difference between:
+The current V1 baseline has completed the acceptance run:
+
+- `pnpm typecheck`
+- `pnpm build`
+- `pnpm test`
+- `pnpm test:integration`
+- `pnpm compare:causal-learn`
+
+The comparison harness currently passes `30/30` JS vs Python cases.
+
+This document is intentionally strict about the difference between:
 
 - behavior parity on selected `causal-learn` fixtures
 - runnable portable baselines that are still approximation-heavy
@@ -21,22 +31,23 @@ The first requested algorithm wave is now runnable in `causal-js`:
 - `CAM_UV`
 - `RCD`
 
-The correct next step is not to add more algorithms blindly. The correct next
-step is to tighten parity where it matters and to keep the portable
-approximation boundaries explicit.
+The first requested algorithm wave is accepted for the current V1 target.
+The correct next step is no longer to prove the baseline exists. The correct
+next step is to preserve the accepted boundary and avoid widening scope
+accidentally.
 
 ## Status Matrix
 
 | Algorithm | Current status | Notes |
 | --- | --- | --- |
-| `PC` | `Selected-path parity` | Parity is stable for `stable=true`, `uc_rule=0`, `uc_priority=2`, `Fisher-Z`, `Chi-square`, and `G-square` on the selected deterministic fixtures. |
-| `GES` | `Selected-path parity` | Parity is stable for continuous Gaussian data with `GaussianBicScore` on the selected deterministic fixtures. |
+| `PC` | `Selected-path parity` | Parity is stable for the selected `Fisher-Z`, `Chi-square`, and `G-square` deterministic fixtures and option combinations covered by the comparison harness. |
+| `GES` | `Selected-path parity` | Parity is stable for the selected Gaussian BIC and discrete BDeu deterministic fixtures. |
 | `CD_NOD` | `Selected-path parity` | Deterministic domain-varying `Fisher-Z` path is aligned for the current supported option surface. |
 | `ExactSearch` | `Selected-path parity` | Simulated Gaussian CPDAG fixture is aligned for the current exact-DAG search baseline. |
 | `GIN` | `Selected-path parity` | The synthetic `TestGIN.py` cases are matched for both `hsic` and a standalone unconditional `kci` backend. |
 | `GRaSP` | `Selected-path parity` | A deterministic synthetic fixture derived from `causal-learn` is now locked into the parity suite for the current Gaussian BIC path. |
-| `CAM_UV` | `Seeded-fixture parity, smoother approximation` | The seeded `TestCAMUV.py` fixture is aligned, but the regression smoother is still a portable approximation rather than `pygam.LinearGAM`. |
-| `RCD` | `Seeded-fixture parity, test-stat approximation` | The seeded `TestRCD.py` fixture is aligned, but some statistical subroutines still use portable approximations. |
+| `CAM_UV` | `Selected-fixture parity, accepted smoother boundary` | The selected `TestCAMUV.py` fixture is aligned. The smoother is portable additive spline backfitting rather than a literal `pygam.LinearGAM` dependency. |
+| `RCD` | `Selected-path parity` | The selected `TestRCD.py` fixture is aligned, including `Shapiro-Wilk`, `MLHSICR`, and `bwMethod = mdbs / scott / silverman` coverage in the comparison harness. |
 
 ## V1 Boundary By Algorithm
 
@@ -48,13 +59,10 @@ In scope:
 - `Fisher-Z`
 - `Chi-square`
 - `G-square`
-- `uc_rule=0`
-- `uc_priority=2`
+- selected `uc_rule / uc_priority` combinations covered by the comparison harness
 
 Out of scope for current v1:
 
-- `uc_rule=1/2`
-- `uc_priority != 2`
 - missing-value PC
 - KCI-based PC / MVPC
 
@@ -64,12 +72,11 @@ In scope:
 
 - continuous Gaussian data
 - `GaussianBicScore`
+- `BDeuScore`
 - selected deterministic fixture parity
 
 Out of scope for current v1:
 
-- `BDeu`
-- broader discrete score coverage
 - richer `causal-learn` return payload compatibility
 
 ### `CD_NOD`
@@ -131,7 +138,7 @@ In scope:
 
 Known approximation:
 
-- `pygam.LinearGAM` is replaced by portable additive polynomial regression
+- `pygam.LinearGAM` is replaced by portable additive spline backfitting
 
 ### `RCD`
 
@@ -142,23 +149,19 @@ In scope:
 
 Known approximations:
 
-- Shapiro-Wilk is replaced by Jarque-Bera
-- OLS is used directly; no `MLHSICR`
+- optimizer identity differs from SciPy `fmin_l_bfgs_b`
 - no bootstrap support
 
-## Recommended Next-Round Priority
+## Current Acceptance Interpretation
 
-Priority should now be:
+Under the currently accepted V1 interpretation:
 
-1. tighten parity for algorithms already in the repo
-2. keep approximation-heavy methods clearly documented
-3. avoid runtime-specific optimization until parity needs force it
+- `CAM_UV` is accepted with a portable smoother boundary
+- real browser worker integration is deferred and non-blocking
+- normalized comparison payloads are acceptable when Python and JS expose different internal metadata schemas
 
-Recommended order:
+Under a stricter future interpretation, the remaining candidate engineering work would be:
 
-1. freeze the current external API surface in docs and examples
-2. expand parity fixtures only where they materially raise confidence
-3. revisit `CAM_UV` smoothing only if a concrete fixture gap appears
-4. revisit `RCD` normality and regression internals only if a concrete fixture gap appears
-
-Only after that should runtime-specific acceleration be revisited.
+1. a dedicated internal GAM package for a closer `pygam` replacement
+2. real browser worker integration coverage
+3. optional widening of output-schema parity where comparison normalization is still used

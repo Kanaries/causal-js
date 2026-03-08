@@ -61,20 +61,29 @@ Deliverable: second portable flagship algorithm.
 
 ## Current Focus
 
-As of 2026-03-07, the first requested algorithm wave is already runnable.
-The roadmap priority is no longer "add the next algorithm at any cost".
+As of the current V1 acceptance run, the first requested algorithm wave is not
+just runnable; it has passed the baseline engineering gate for this project
+scope. The roadmap priority is therefore no longer "finish V1 existence".
 It is now:
 
-1. freeze the current baseline and fixture set
-2. separate true parity from portable approximation clearly
-3. tighten parity only where it changes confidence materially
-4. delay runtime-specific acceleration until parity needs force it
+1. preserve the accepted V1 boundary
+2. document the accepted surface clearly
+3. only widen parity or runtime coverage when it materially changes confidence
+4. avoid reopening dependency-level reimplementation work unless it becomes a product requirement
 
 See [v1-status.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/v1-status.md) for the current algorithm-by-algorithm status matrix.
 
 ## Suggested Near-Term Work Items
 
-1. freeze the external v1 API surface in docs and examples
-2. keep approximation-heavy substitutions documented in code and docs
-3. expand parity fixtures only when they close a concrete confidence gap
-4. revisit runtime specialization only after the portable baseline is judged stable
+1. finish external-facing v1 documentation and examples
+2. keep the acceptance checklist and comparison harness current as the baseline evolves
+3. add new parity cases only when they close a concrete confidence gap
+4. revisit runtime specialization only after a real product need appears
+
+## Deferred Work
+
+These items are explicitly deferred beyond the current accepted V1 boundary:
+
+- a dependency-level `pygam` replacement for `CAM_UV`
+- real browser worker integration coverage
+- broader internal metadata parity where comparison payloads are intentionally normalized
