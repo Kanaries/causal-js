@@ -1,0 +1,58 @@
+{
+  "name": "@kanaries/causal",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./node": {
+      "types": "./dist/node/index.d.ts",
+      "import": "./dist/node/index.js",
+      "require": "./dist/node/index.cjs"
+    },
+    "./web": {
+      "types": "./dist/web/index.d.ts",
+      "import": "./dist/web/index.js",
+      "require": "./dist/web/index.cjs"
+    },
+    "./node/workers/pc-worker-entry": {
+      "types": "./dist/node/workers/pc-worker-entry.d.ts",
+      "import": "./dist/node/workers/pc-worker-entry.js",
+      "require": "./dist/node/workers/pc-worker-entry.cjs"
+    },
+    "./node/workers/pc-worker-runtime": {
+      "types": "./dist/node/workers/pc-worker-runtime.d.ts",
+      "import": "./dist/node/workers/pc-worker-runtime.js",
+      "require": "./dist/node/workers/pc-worker-runtime.cjs"
+    },
+    "./web/workers/pc-worker-entry": {
+      "types": "./dist/web/workers/pc-worker-entry.d.ts",
+      "import": "./dist/web/workers/pc-worker-entry.js",
+      "require": "./dist/web/workers/pc-worker-entry.cjs"
+    },
+    "./web/workers/pc-worker-runtime": {
+      "types": "./dist/web/workers/pc-worker-runtime.d.ts",
+      "import": "./dist/web/workers/pc-worker-runtime.js",
+      "require": "./dist/web/workers/pc-worker-runtime.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup --config tsup.config.ts",
+    "clean": "rimraf dist",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}

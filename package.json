@@ -9,6 +9,7 @@
     "build": "pnpm -r build",
     "clean": "pnpm -r clean",
     "compare:causal-learn": "node scripts/compare-causal-learn.cjs",
+    "pack:causal": "cd packages/causal && npm pack --dry-run",
     "test": "vitest run",
     "test:integration": "pnpm build && vitest run --config vitest.integration.config.ts",
     "typecheck": "pnpm -r typecheck"

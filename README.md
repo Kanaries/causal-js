@@ -2,6 +2,12 @@
 
 A JavaScript and TypeScript toolkit for causal discovery and causal inference.
 
+For npm consumers, the public package is `@kanaries/causal`.
+
+```bash
+pnpm add @kanaries/causal
+```
+
 This repository is organized as a single Git repo with a `pnpm` workspace. The
 goal is to keep the portable causal core independent from runtime-specific
 integrations so the project can support:
@@ -10,7 +16,23 @@ integrations so the project can support:
 - browser-safe algorithms
 - shared algorithms with different runtime implementations
 
-## Workspace Packages
+## Public Package
+
+The publish target is a single npm package:
+
+- `@kanaries/causal`
+
+Public entry points:
+
+- `@kanaries/causal`
+- `@kanaries/causal/node`
+- `@kanaries/causal/web`
+
+The internal workspace packages remain private implementation units. They are
+bundled into the public facade package at build time and are not intended to be
+published separately.
+
+## Internal Workspace Packages
 
 - `@causal-js/core`: shared graph types, runtime capability metadata, and common algorithm contracts
 - `@causal-js/discovery`: runtime-agnostic causal discovery APIs and algorithm registry
@@ -72,22 +94,22 @@ See [v1-status.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js
 
 ## Stable Entry Points
 
-Current package roles:
+Current public package roles:
 
-- `@causal-js/core`: graph primitives, matrix containers, CI tests, score functions
-- `@causal-js/discovery`: runtime-agnostic algorithm entry points
-- `@causal-js/node`: Node-oriented facade; currently re-exports the portable surface and runtime metadata
-- `@causal-js/web`: browser-oriented facade; currently re-exports the portable surface and runtime metadata
+- `@kanaries/causal`: portable graph primitives, matrix containers, CI tests, score functions, and discovery algorithms
+- `@kanaries/causal/node`: Node-oriented runtime facade
+- `@kanaries/causal/web`: browser-oriented runtime facade
 
-At the current v1 stage, `@causal-js/node` and `@causal-js/web` intentionally overlap a lot. Runtime-specific divergence is still limited to runtime capability probes, execution planning, and worker-adapter scaffolding.
+At the current v1 stage, the Node and Web public facades intentionally overlap
+a lot. Runtime-specific divergence is currently limited to capability probes,
+execution planning, and worker-adapter scaffolding.
 
 ## Usage
 
 ### `PC`
 
 ```ts
-import { DenseMatrix, FisherZTest } from "@causal-js/core";
-import { pc } from "@causal-js/discovery";
+import { DenseMatrix, FisherZTest, pc } from "@kanaries/causal";
 
 const data = new DenseMatrix(rows);
 const result = pc({
@@ -105,8 +127,7 @@ console.log(result.graph);
 ### `GES`
 
 ```ts
-import { DenseMatrix, GaussianBicScore } from "@causal-js/core";
-import { ges } from "@causal-js/discovery";
+import { DenseMatrix, GaussianBicScore, ges } from "@kanaries/causal";
 
 const data = new DenseMatrix(rows);
 const result = ges({
@@ -120,8 +141,7 @@ console.log(result.cpdag);
 ### `CD_NOD`
 
 ```ts
-import { DenseMatrix, FisherZTest } from "@causal-js/core";
-import { cdnod } from "@causal-js/discovery";
+import { DenseMatrix, FisherZTest, cdnod } from "@kanaries/causal";
 
 const data = new DenseMatrix(rows);
 const context = [1, 1, 1, 2, 2, 2];
@@ -140,8 +160,7 @@ console.log(result.contextNodeIndex);
 ### `ExactSearch`
 
 ```ts
-import { DenseMatrix, GaussianBicScore } from "@causal-js/core";
-import { exactSearch } from "@causal-js/discovery";
+import { DenseMatrix, GaussianBicScore, exactSearch } from "@kanaries/causal";
 
 const data = new DenseMatrix(rows);
 const result = exactSearch({
@@ -156,8 +175,7 @@ console.log(result.dag);
 ### `GIN`
 
 ```ts
-import { DenseMatrix } from "@causal-js/core";
-import { gin } from "@causal-js/discovery";
+import { DenseMatrix, gin } from "@kanaries/causal";
 
 const data = new DenseMatrix(rows);
 const result = gin({
@@ -178,7 +196,7 @@ import {
   detectNodeRuntimeCapabilities,
   nodeRuntime,
   pc
-} from "@causal-js/node";
+} from "@kanaries/causal/node";
 
 const data = new DenseMatrix(rows);
 const result = pc({
@@ -197,7 +215,7 @@ import {
   detectWebRuntimeCapabilities,
   webRuntime,
   pc
-} from "@causal-js/web";
+} from "@kanaries/causal/web";
 
 const data = new DenseMatrix(rows);
 const result = pc({
@@ -212,14 +230,14 @@ console.log(webRuntime.supportsWebWorkers);
 ### Runtime Capability Matrix
 
 ```ts
-import { nodeAlgorithmCatalog, isNodeAlgorithmSupported } from "@causal-js/node";
+import { nodeAlgorithmCatalog, isNodeAlgorithmSupported } from "@kanaries/causal/node";
 
 console.log(nodeAlgorithmCatalog.map((entry) => entry.id));
 console.log(isNodeAlgorithmSupported("pc"));
 ```
 
 ```ts
-import { webAlgorithmCatalog, isWebAlgorithmSupported } from "@causal-js/web";
+import { webAlgorithmCatalog, isWebAlgorithmSupported } from "@kanaries/causal/web";
 
 console.log(webAlgorithmCatalog.map((entry) => entry.id));
 console.log(isWebAlgorithmSupported("calm"));
@@ -247,8 +265,12 @@ See:
 
 ```bash
 pnpm install
+pnpm typecheck
 pnpm build
 pnpm test
+pnpm test:integration
+pnpm compare:causal-learn
+pnpm pack:causal
 ```
 
 ## License
