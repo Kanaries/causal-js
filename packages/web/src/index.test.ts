@@ -57,6 +57,7 @@ describe("@causal-js/web", () => {
   it("exposes a browser capability matrix for supported algorithms", () => {
     expect(webAlgorithmCatalog.map((descriptor) => descriptor.id)).toEqual([
       "pc",
+      "fci",
       "ges",
       "cdnod",
       "exact-search",

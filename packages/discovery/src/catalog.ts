@@ -16,6 +16,14 @@ export const algorithmCatalog: AlgorithmDescriptor[] = [
     ]
   },
   {
+    id: "fci",
+    summary: "Constraint-based PAG discovery with latent-confounder orientation rules built on endpoint-aware graph semantics.",
+    availability: [
+      { runtime: "node", supported: true, capabilities: ["cpu", "worker"] },
+      { runtime: "browser", supported: true, capabilities: ["cpu", "worker"] }
+    ]
+  },
+  {
     id: "ges",
     summary: "Score-based search planned after the shared scoring interface lands.",
     availability: [

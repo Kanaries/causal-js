@@ -270,6 +270,13 @@ export class CausalGraph {
     );
   }
 
+  isCircleEdge(node1: string, node2: string): boolean {
+    return (
+      this.getEndpoint(node1, node2) === EDGE_ENDPOINT.circle &&
+      this.getEndpoint(node2, node1) === EDGE_ENDPOINT.circle
+    );
+  }
+
   isPartiallyOrientedEdge(node1: string, node2: string): boolean {
     const forward = this.getEndpoint(node1, node2);
     const reverse = this.getEndpoint(node2, node1);
@@ -348,6 +355,26 @@ export class CausalGraph {
 
   getChildIds(nodeId: string): string[] {
     return this.getAdjacentNodeIds(nodeId).filter((candidate) => this.isParentOf(nodeId, candidate));
+  }
+
+  getNodesInto(nodeId: string, endpoint: EdgeEndpoint): GraphNode[] {
+    return this.getNodeIdsInto(nodeId, endpoint).map((id) => cloneNode(this.getNodeById(id)));
+  }
+
+  getNodeIdsInto(nodeId: string, endpoint: EdgeEndpoint): string[] {
+    return this.getAdjacentNodeIds(nodeId).filter((candidate) => {
+      return this.getEndpoint(nodeId, candidate) === endpoint;
+    });
+  }
+
+  getNodesOutOf(nodeId: string, endpoint: EdgeEndpoint): GraphNode[] {
+    return this.getNodeIdsOutOf(nodeId, endpoint).map((id) => cloneNode(this.getNodeById(id)));
+  }
+
+  getNodeIdsOutOf(nodeId: string, endpoint: EdgeEndpoint): string[] {
+    return this.getAdjacentNodeIds(nodeId).filter((candidate) => {
+      return this.getEndpoint(candidate, nodeId) === endpoint;
+    });
   }
 
   getAncestors(nodeIds: readonly string[]): GraphNode[] {
@@ -532,6 +559,23 @@ export class CausalGraph {
     const node1 = this.getNodeIdAt(index1);
     const node2 = this.getNodeIdAt(index2);
     return this.isParentOf(node1, node2);
+  }
+
+  isDefColliderByIds(left: string, center: string, right: string): boolean {
+    return (
+      this.isAdjacentTo(left, center) &&
+      this.isAdjacentTo(center, right) &&
+      this.getEndpoint(center, left) === EDGE_ENDPOINT.arrow &&
+      this.getEndpoint(center, right) === EDGE_ENDPOINT.arrow
+    );
+  }
+
+  isDefCollider(left: number, center: number, right: number): boolean {
+    return this.isDefColliderByIds(
+      this.getNodeIdAt(left),
+      this.getNodeIdAt(center),
+      this.getNodeIdAt(right)
+    );
   }
 
   findUnshieldedTriples(): IndexTriple[] {

@@ -50,6 +50,23 @@ function toCausalLearnMatrix(shape: GraphShape): number[][] {
   );
   const nodeIndex = new Map(shape.nodes.map((node, index) => [node.id, index]));
 
+  const encodeEndpoint = (endpoint: string): number => {
+    switch (endpoint) {
+      case "tail":
+        return -1;
+      case "arrow":
+        return 1;
+      case "circle":
+        return 2;
+      case "star":
+        return 3;
+      case "none":
+        return 0;
+      default:
+        throw new Error(`Unsupported endpoint: ${endpoint}`);
+    }
+  };
+
   for (const edge of shape.edges) {
     const index1 = nodeIndex.get(edge.node1);
     const index2 = nodeIndex.get(edge.node2);
@@ -57,33 +74,8 @@ function toCausalLearnMatrix(shape: GraphShape): number[][] {
       throw new Error(`Missing node index for edge ${edge.node1}-${edge.node2}`);
     }
 
-    if (edge.endpoint1 === "tail" && edge.endpoint2 === "arrow") {
-      matrix[index1]![index2] = -1;
-      matrix[index2]![index1] = 1;
-      continue;
-    }
-
-    if (edge.endpoint1 === "arrow" && edge.endpoint2 === "tail") {
-      matrix[index1]![index2] = 1;
-      matrix[index2]![index1] = -1;
-      continue;
-    }
-
-    if (edge.endpoint1 === "tail" && edge.endpoint2 === "tail") {
-      matrix[index1]![index2] = -1;
-      matrix[index2]![index1] = -1;
-      continue;
-    }
-
-    if (edge.endpoint1 === "arrow" && edge.endpoint2 === "arrow") {
-      matrix[index1]![index2] = 1;
-      matrix[index2]![index1] = 1;
-      continue;
-    }
-
-    throw new Error(
-      `Unsupported endpoint pair ${edge.endpoint1}-${edge.endpoint2} in causal-learn parity test.`
-    );
+    matrix[index1]![index2] = encodeEndpoint(edge.endpoint1);
+    matrix[index2]![index1] = encodeEndpoint(edge.endpoint2);
   }
 
   return matrix;

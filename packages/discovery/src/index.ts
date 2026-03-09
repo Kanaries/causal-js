@@ -3,6 +3,7 @@ export * from "./camuv";
 export * from "./cdnod";
 export * from "./contracts";
 export * from "./exact-search";
+export * from "./fci";
 export * from "./ges";
 export * from "./gin";
 export * from "./grasp";

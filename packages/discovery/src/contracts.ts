@@ -20,6 +20,17 @@ export interface PcOptions {
   backgroundKnowledge?: BackgroundKnowledge;
 }
 
+export interface FciOptions {
+  alpha?: number;
+  ciTest: ConditionalIndependenceTest;
+  data: NumericMatrix;
+  nodeLabels?: readonly string[];
+  stable?: boolean;
+  depth?: number;
+  maxPathLength?: number;
+  backgroundKnowledge?: BackgroundKnowledge;
+}
+
 export interface GesOptions {
   data: NumericMatrix;
   score: LocalScoreFunction;
@@ -114,6 +125,12 @@ export interface PcSkeletonResult extends AlgorithmResult {
 }
 
 export interface PcResult extends PcSkeletonResult {}
+
+export interface FciResult extends AlgorithmResult {
+  maxDepth: number;
+  sepsets: SeparationSetEntry[];
+  testsRun: number;
+}
 
 export interface CdnodResult extends PcResult {
   contextNodeIndex: number;

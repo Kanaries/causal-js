@@ -57,6 +57,7 @@ describe("@causal-js/node", () => {
   it("exposes a node capability matrix for supported algorithms", () => {
     expect(nodeAlgorithmCatalog.map((descriptor) => descriptor.id)).toEqual([
       "pc",
+      "fci",
       "ges",
       "cdnod",
       "exact-search",
