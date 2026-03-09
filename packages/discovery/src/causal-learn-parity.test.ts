@@ -18,6 +18,7 @@ import { ges } from "./ges";
 import { cdnod } from "./cdnod";
 import { camuv } from "./camuv";
 import { exactSearch } from "./exact-search";
+import { fci } from "./fci";
 import { pc } from "./pc";
 import { grasp } from "./grasp";
 import { rcd } from "./rcd";
@@ -235,6 +236,20 @@ describe("causal-learn parity", () => {
 
     expect(toCausalLearnMatrix(result.graph)).toEqual(
       loadTxtMatrix("benchmark_returned_results/domain_123_cdnod_fisherz_0.05_stable_0_2.txt")
+    );
+  });
+
+  it("matches the current causal-learn FCI runtime output on linear_10", () => {
+    const data = new DenseMatrix(loadTxtMatrix("data_linear_10.txt", 1));
+    const result = fci({
+      alpha: 0.05,
+      ciTest: new FisherZTest(data),
+      data,
+      nodeLabels: createNodeLabels(data.columns)
+    });
+
+    expect(toCausalLearnMatrix(result.graph)).toEqual(
+      loadTxtMatrix("benchmark_returned_results/linear_10_fci_fisherz_runtime_py310.txt")
     );
   });
 

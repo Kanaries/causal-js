@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import random
 import sys
@@ -19,6 +21,7 @@ from causallearn.graph.Endpoint import Endpoint
 from causallearn.graph.GraphNode import GraphNode
 from causallearn.graph.NodeType import NodeType
 from causallearn.search.ConstraintBased.CDNOD import cdnod
+from causallearn.search.ConstraintBased.FCI import fci
 from causallearn.search.ConstraintBased.PC import pc
 from causallearn.search.FCMBased import lingam
 from causallearn.search.FCMBased.lingam import CAMUV
@@ -131,6 +134,12 @@ def rcd_confounders_from_matrix(matrix: np.ndarray) -> list[list[int]]:
             if np.isnan(matrix[left, right]) or np.isnan(matrix[right, left]):
                 pairs.append([left, right])
     return pairs
+
+
+def run_silenced(builder):
+    buffer = io.StringIO()
+    with contextlib.redirect_stdout(buffer):
+        return builder()
 
 
 def make_case(case_id: str, algorithm: str, input_summary: dict[str, Any], output_summary: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
@@ -288,6 +297,24 @@ def run_cases() -> list[dict[str, Any]]:
                 {"graphMatrix": graph_matrix(cg_cdnod.G)},
             )
         )(cdnod(domain_data, context, 0.05, fisherz, True, 0, 2, verbose=False, show_progress=False))
+    )
+
+    append_case(
+        cases,
+        "fci.linear10.fisherz",
+        lambda: (
+            lambda graph_fci, _edges: make_case(
+                "fci.linear10.fisherz",
+                "fci",
+                {
+                    "data": {"rows": int(data_linear_10.shape[0]), "columns": int(data_linear_10.shape[1])},
+                    "alpha": 0.05,
+                    "ciTest": "fisherz",
+                },
+                graph_output_summary(graph_fci),
+                {"graphMatrix": graph_matrix(graph_fci)},
+            )
+        )(*run_silenced(lambda: fci(data_linear_10, fisherz, 0.05, verbose=False, show_progress=False)))
     )
 
     append_case(

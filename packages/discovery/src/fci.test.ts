@@ -104,4 +104,19 @@ describe("fci", () => {
     expect(received[7]?.[17]).toBe(expected[7]?.[17]);
     expect(received[10]?.[13]).toBe(expected[10]?.[13]);
   }, 20_000);
+
+  it("matches the current causal-learn runtime output on linear_10", () => {
+    const data = new DenseMatrix(loadTxtMatrix("data_linear_10.txt", 1));
+    const expected = loadTxtMatrix(
+      "benchmark_returned_results/linear_10_fci_fisherz_runtime_py310.txt"
+    );
+    const result = fci({
+      alpha: 0.05,
+      ciTest: new FisherZTest(data),
+      data,
+      nodeLabels: createNodeLabels(data.columns)
+    });
+
+    expect(toCausalLearnMatrix(CausalGraph.fromShape(result.graph))).toEqual(expected);
+  }, 20_000);
 });

@@ -144,7 +144,7 @@ function runJsCases(core, discovery) {
     GaussianBicScore,
     BDeuScore
   } = core;
-  const { pc, cdnod, ges, exactSearch, grasp, gin, camuv, rcd } = discovery;
+  const { pc, cdnod, fci, ges, exactSearch, grasp, gin, camuv, rcd } = discovery;
 
   const cases = [];
 
@@ -278,6 +278,26 @@ function runJsCases(core, discovery) {
       },
       graphOutputSummary(cdnodResult.graph),
       { graphMatrix: graphMatrix(cdnodResult.graph) }
+    )
+  );
+
+  const fciResult = fci({
+    alpha: 0.05,
+    ciTest: new FisherZTest(dataLinear10),
+    data: dataLinear10,
+    nodeLabels: createNodeLabels(dataLinear10.columns)
+  });
+  cases.push(
+    makeCase(
+      "fci.linear10.fisherz",
+      "fci",
+      {
+        data: { rows: dataLinear10.rows, columns: dataLinear10.columns },
+        alpha: 0.05,
+        ciTest: "fisherz"
+      },
+      graphOutputSummary(fciResult.graph),
+      { graphMatrix: graphMatrix(fciResult.graph) }
     )
   );
 
