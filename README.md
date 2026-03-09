@@ -1,12 +1,31 @@
 # causal.js
 
+[![npm version](https://img.shields.io/npm/v/%40kanaries%2Fcausal)](https://www.npmjs.com/package/@kanaries/causal)
+[![npm downloads](https://img.shields.io/npm/dm/%40kanaries%2Fcausal)](https://www.npmjs.com/package/@kanaries/causal)
+
 A JavaScript and TypeScript toolkit for causal discovery and causal inference.
 
 For npm consumers, the public package is `@kanaries/causal`.
 
+## Install
+
+```bash
+npm install @kanaries/causal
+```
+
 ```bash
 pnpm add @kanaries/causal
 ```
+
+```bash
+yarn add @kanaries/causal
+```
+
+```bash
+bun add @kanaries/causal
+```
+
+## Public Package
 
 This repository is organized as a single Git repo with a `pnpm` workspace. The
 goal is to keep the portable causal core independent from runtime-specific
@@ -15,8 +34,6 @@ integrations so the project can support:
 - Node.js-only algorithms or accelerators
 - browser-safe algorithms
 - shared algorithms with different runtime implementations
-
-## Public Package
 
 The publish target is a single npm package:
 

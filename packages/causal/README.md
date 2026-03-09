@@ -1,5 +1,8 @@
 # @kanaries/causal
 
+[![npm version](https://img.shields.io/npm/v/%40kanaries%2Fcausal)](https://www.npmjs.com/package/@kanaries/causal)
+[![npm downloads](https://img.shields.io/npm/dm/%40kanaries%2Fcausal)](https://www.npmjs.com/package/@kanaries/causal)
+
 Public npm facade for `causal-js`.
 
 Primary entry points:
@@ -11,7 +14,19 @@ Primary entry points:
 Install:
 
 ```bash
+npm install @kanaries/causal
+```
+
+```bash
 pnpm add @kanaries/causal
+```
+
+```bash
+yarn add @kanaries/causal
+```
+
+```bash
+bun add @kanaries/causal
 ```
 
 Example:
