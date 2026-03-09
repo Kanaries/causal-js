@@ -292,4 +292,4 @@ pnpm pack:causal
 
 ## License
 
-MIT
+Apache-2.0
