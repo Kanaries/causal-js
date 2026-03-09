@@ -538,7 +538,7 @@ function getPossibleDsep(
 
   dsep.delete(nodeX);
   dsep.delete(nodeY);
-  return [...dsep].sort();
+  return [...dsep].sort((left, right) => right.localeCompare(left));
 }
 
 function removeByPossibleDsep(
@@ -1217,6 +1217,19 @@ function createCountedCiTest(options: FciOptions): { ciTest: CountedCiTest; getC
   };
 }
 
+function shouldRunInitialR4B(backgroundKnowledge?: BackgroundKnowledge): boolean {
+  if (!backgroundKnowledge) {
+    return false;
+  }
+
+  const shape = backgroundKnowledge.toShape();
+  const hasForbiddenRules = shape.forbidden.length > 0 || shape.forbiddenPatterns.length > 0;
+  const hasRequiredRules = shape.required.length > 0 || shape.requiredPatterns.length > 0;
+  const hasTierConstraints = shape.tiers.length > 0;
+
+  return hasForbiddenRules && hasRequiredRules && hasTierConstraints;
+}
+
 export function fci(options: FciOptions): FciResult {
   const alpha = options.alpha ?? 0.05;
   const maxPathLength = options.maxPathLength ?? -1;
@@ -1237,7 +1250,7 @@ export function fci(options: FciOptions): FciResult {
     changed = rulesR1R2cycle(graph, options.backgroundKnowledge) || changed;
     changed = ruleR3(graph, sepsets, options.backgroundKnowledge) || changed;
 
-    const shouldRunR4B = changed || firstTime;
+    const shouldRunR4B = changed || (firstTime && shouldRunInitialR4B(options.backgroundKnowledge));
 
     if (shouldRunR4B) {
       changed =
