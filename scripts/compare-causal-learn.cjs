@@ -50,6 +50,18 @@ function createNodeLabels(count) {
   return Array.from({ length: count }, (_, index) => `X${index + 1}`);
 }
 
+function createOracleData(DenseMatrix, observedCount) {
+  return new DenseMatrix([Array.from({ length: observedCount }, () => 0)]);
+}
+
+function createDag(CausalGraph, totalNodes, edges) {
+  const graph = CausalGraph.fromNodeIds(createNodeLabels(totalNodes));
+  for (const [from, to] of edges) {
+    graph.orientEdge(`X${from + 1}`, `X${to + 1}`);
+  }
+  return graph;
+}
+
 function graphOutputSummary(shape) {
   return {
     nodeCount: shape.nodes.length,
@@ -137,7 +149,10 @@ function makeCase(id, algorithm, input, output, result) {
 
 function runJsCases(core, discovery) {
   const {
+    BackgroundKnowledge,
+    CausalGraph,
     DenseMatrix,
+    DSeparationTest,
     FisherZTest,
     ChiSquareTest,
     GSquareTest,
@@ -300,6 +315,127 @@ function runJsCases(core, discovery) {
       { graphMatrix: graphMatrix(fciResult.graph) }
     )
   );
+
+  for (const caseSpec of [
+    {
+      id: "fci.simple1.dsep",
+      observedCount: 4,
+      totalNodes: 4,
+      edges: [
+        [0, 1],
+        [0, 2],
+        [1, 3],
+        [2, 3]
+      ]
+    },
+    {
+      id: "fci.simple2.dsep",
+      observedCount: 7,
+      totalNodes: 9,
+      edges: [
+        [7, 0],
+        [7, 1],
+        [8, 3],
+        [8, 4],
+        [2, 5],
+        [2, 6],
+        [5, 1],
+        [6, 3],
+        [3, 0],
+        [1, 4]
+      ]
+    },
+    {
+      id: "fci.simple3.dsep",
+      observedCount: 5,
+      totalNodes: 5,
+      edges: [
+        [0, 2],
+        [1, 2],
+        [2, 3],
+        [2, 4]
+      ]
+    },
+    {
+      id: "fci.fritl.dsep",
+      observedCount: 7,
+      totalNodes: 10,
+      edges: [
+        [7, 0],
+        [7, 5],
+        [8, 0],
+        [8, 6],
+        [9, 3],
+        [9, 4],
+        [9, 6],
+        [0, 1],
+        [0, 2],
+        [1, 2],
+        [2, 4],
+        [5, 6]
+      ]
+    }
+  ]) {
+    const observedNodeLabels = createNodeLabels(caseSpec.observedCount);
+    const dag = createDag(CausalGraph, caseSpec.totalNodes, caseSpec.edges);
+    const result = fci({
+      alpha: 0.05,
+      ciTest: new DSeparationTest(dag, observedNodeLabels),
+      data: createOracleData(DenseMatrix, caseSpec.observedCount),
+      nodeLabels: observedNodeLabels
+    });
+    cases.push(
+      makeCase(
+        caseSpec.id,
+        "fci",
+        {
+          observedCount: caseSpec.observedCount,
+          totalNodes: caseSpec.totalNodes,
+          alpha: 0.05,
+          ciTest: "d-separation"
+        },
+        graphOutputSummary(result.graph),
+        { graphMatrix: graphMatrix(result.graph) }
+      )
+    );
+  }
+
+  {
+    const observedNodeLabels = createNodeLabels(4);
+    const dag = createDag(CausalGraph, 4, [
+      [0, 1],
+      [0, 2],
+      [1, 3],
+      [2, 3]
+    ]);
+    const result = fci({
+      alpha: 0.05,
+      ciTest: new DSeparationTest(dag, observedNodeLabels),
+      data: createOracleData(DenseMatrix, 4),
+      nodeLabels: observedNodeLabels,
+      backgroundKnowledge: new BackgroundKnowledge().addForbidden("X1", "X2").addForbidden("X2", "X1")
+    });
+    cases.push(
+      makeCase(
+        "fci.simple1.dsep.bk",
+        "fci",
+        {
+          observedCount: 4,
+          totalNodes: 4,
+          alpha: 0.05,
+          ciTest: "d-separation",
+          backgroundKnowledge: {
+            forbidden: [
+              ["X1", "X2"],
+              ["X2", "X1"]
+            ]
+          }
+        },
+        graphOutputSummary(result.graph),
+        { graphMatrix: graphMatrix(result.graph) }
+      )
+    );
+  }
 
   const gesLinear = ges({
     data: dataLinear10,

@@ -4,7 +4,14 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { CausalGraph, DenseMatrix, EDGE_ENDPOINT, FisherZTest } from "@causal-js/core";
+import {
+  BackgroundKnowledge,
+  CausalGraph,
+  DenseMatrix,
+  DSeparationTest,
+  EDGE_ENDPOINT,
+  FisherZTest
+} from "@causal-js/core";
 
 import { applyFciRuleR5, fci } from "./fci";
 
@@ -24,6 +31,18 @@ function loadTxtMatrix(filename: string, skipRows = 0): number[][] {
 
 function createNodeLabels(count: number): string[] {
   return Array.from({ length: count }, (_, index) => `X${index + 1}`);
+}
+
+function createOracleData(observedCount: number): DenseMatrix {
+  return new DenseMatrix([Array.from({ length: observedCount }, () => 0)]);
+}
+
+function createDag(totalNodes: number, edges: readonly (readonly [number, number])[]): CausalGraph {
+  const graph = CausalGraph.fromNodeIds(createNodeLabels(totalNodes));
+  for (const [from, to] of edges) {
+    graph.orientEdge(`X${from + 1}`, `X${to + 1}`);
+  }
+  return graph;
 }
 
 function toCausalLearnMatrix(graph: CausalGraph): number[][] {
@@ -119,4 +138,123 @@ describe("fci", () => {
 
     expect(toCausalLearnMatrix(CausalGraph.fromShape(result.graph))).toEqual(expected);
   }, 20_000);
+
+  it("matches the deterministic d-separation simple cases from TestFCI", () => {
+    const simple1Data = createOracleData(4);
+    const simple1Dag = createDag(4, [
+      [0, 1],
+      [0, 2],
+      [1, 3],
+      [2, 3]
+    ]);
+    const simple1 = fci({
+      alpha: 0.05,
+      data: simple1Data,
+      ciTest: new DSeparationTest(simple1Dag),
+      nodeLabels: createNodeLabels(4)
+    });
+    expect(toCausalLearnMatrix(CausalGraph.fromShape(simple1.graph))).toEqual([
+      [0, 2, 2, 0],
+      [2, 0, 0, -1],
+      [2, 0, 0, -1],
+      [0, 1, 1, 0]
+    ]);
+
+    const simple1Bk = fci({
+      alpha: 0.05,
+      data: simple1Data,
+      ciTest: new DSeparationTest(simple1Dag),
+      nodeLabels: createNodeLabels(4),
+      backgroundKnowledge: new BackgroundKnowledge().addForbidden("X1", "X2").addForbidden("X2", "X1")
+    });
+    expect(toCausalLearnMatrix(CausalGraph.fromShape(simple1Bk.graph))).toEqual([
+      [0, 0, 2, 0],
+      [0, 0, 0, 2],
+      [2, 0, 0, 2],
+      [0, 1, 1, 0]
+    ]);
+
+    const simple3Data = createOracleData(5);
+    const simple3Dag = createDag(5, [
+      [0, 2],
+      [1, 2],
+      [2, 3],
+      [2, 4]
+    ]);
+    const simple3 = fci({
+      alpha: 0.05,
+      data: simple3Data,
+      ciTest: new DSeparationTest(simple3Dag),
+      nodeLabels: createNodeLabels(5)
+    });
+    expect(toCausalLearnMatrix(CausalGraph.fromShape(simple3.graph))).toEqual([
+      [0, 0, 2, 0, 0],
+      [0, 0, 2, 0, 0],
+      [1, 1, 0, -1, -1],
+      [0, 0, 1, 0, 0],
+      [0, 0, 1, 0, 0]
+    ]);
+  });
+
+  it("matches the latent-variable d-separation cases from TestFCI", () => {
+    const simple2Data = createOracleData(7);
+    const simple2Dag = createDag(9, [
+      [7, 0],
+      [7, 1],
+      [8, 3],
+      [8, 4],
+      [2, 5],
+      [2, 6],
+      [5, 1],
+      [6, 3],
+      [3, 0],
+      [1, 4]
+    ]);
+    const simple2 = fci({
+      alpha: 0.05,
+      data: simple2Data,
+      ciTest: new DSeparationTest(simple2Dag, createNodeLabels(7)),
+      nodeLabels: createNodeLabels(7)
+    });
+    expect(toCausalLearnMatrix(CausalGraph.fromShape(simple2.graph))).toEqual([
+      [0, 1, 0, 1, 0, 0, 0],
+      [1, 0, 0, 0, -1, 1, 0],
+      [0, 0, 0, 0, 0, 2, 2],
+      [-1, 0, 0, 0, 1, 0, 1],
+      [0, 1, 0, 1, 0, 0, 0],
+      [0, 2, 2, 0, 0, 0, 0],
+      [0, 0, 2, 2, 0, 0, 0]
+    ]);
+
+    const fritlData = createOracleData(7);
+    const fritlDag = createDag(10, [
+      [7, 0],
+      [7, 5],
+      [8, 0],
+      [8, 6],
+      [9, 3],
+      [9, 4],
+      [9, 6],
+      [0, 1],
+      [0, 2],
+      [1, 2],
+      [2, 4],
+      [5, 6]
+    ]);
+    const fritl = fci({
+      alpha: 0.05,
+      data: fritlData,
+      ciTest: new DSeparationTest(fritlDag, createNodeLabels(7)),
+      nodeLabels: createNodeLabels(7)
+    });
+    expect(toCausalLearnMatrix(CausalGraph.fromShape(fritl.graph))).toEqual([
+      [0, 2, 2, 0, 0, 2, 2],
+      [2, 0, 2, 0, 0, 0, 0],
+      [2, 2, 0, 0, 2, 0, 0],
+      [0, 0, 0, 0, 2, 0, 2],
+      [0, 0, 1, 1, 0, 0, 1],
+      [2, 0, 0, 0, 0, 0, 2],
+      [1, 0, 0, 1, 1, 1, 0]
+    ]);
+  });
 });

@@ -30,7 +30,8 @@ from causallearn.search.PermutationBased.GRaSP import grasp
 from causallearn.search.ScoreBased.ExactSearch import bic_exact_search
 from causallearn.search.ScoreBased.GES import ges
 from causallearn.utils.DAG2CPDAG import dag2cpdag
-from causallearn.utils.cit import chisq, fisherz, gsq
+from causallearn.utils.PCUtils.BackgroundKnowledge import BackgroundKnowledge
+from causallearn.utils.cit import chisq, d_separation, fisherz, gsq
 
 
 FIXTURE_ROOT = ROOT / "fixtures" / "causal-learn" / "TestData"
@@ -315,6 +316,67 @@ def run_cases() -> list[dict[str, Any]]:
                 {"graphMatrix": graph_matrix(graph_fci)},
             )
         )(*run_silenced(lambda: fci(data_linear_10, fisherz, 0.05, verbose=False, show_progress=False)))
+    )
+
+    for case_id, observed_count, edges in (
+        ("fci.simple1.dsep", 4, [(0, 1), (0, 2), (1, 3), (2, 3)]),
+        ("fci.simple2.dsep", 7, [(7, 0), (7, 1), (8, 3), (8, 4), (2, 5), (2, 6), (5, 1), (6, 3), (3, 0), (1, 4)]),
+        ("fci.simple3.dsep", 5, [(0, 2), (1, 2), (2, 3), (2, 4)]),
+        ("fci.fritl.dsep", 7, [(7, 0), (7, 5), (8, 0), (8, 6), (9, 3), (9, 4), (9, 6), (0, 1), (0, 2), (1, 2), (2, 4), (5, 6)]),
+    ):
+        append_case(
+            cases,
+            case_id,
+            lambda case_id=case_id, observed_count=observed_count, edges=edges: (
+                lambda dag: (
+                    lambda graph_fci, _edges: make_case(
+                        case_id,
+                        "fci",
+                        {
+                            "observedCount": observed_count,
+                            "totalNodes": max(max(edge) for edge in edges) + 1,
+                            "alpha": 0.05,
+                            "ciTest": "d-separation",
+                        },
+                        graph_output_summary(graph_fci),
+                        {"graphMatrix": graph_matrix(graph_fci)},
+                    )
+                )(*run_silenced(lambda: fci(np.empty(shape=(0, observed_count)), d_separation, 0.05, verbose=False, show_progress=False, true_dag=dag)))
+            )(__import__("networkx").DiGraph(edges))
+        )
+
+    append_case(
+        cases,
+        "fci.simple1.dsep.bk",
+        lambda: (
+            lambda dag: (
+                lambda bk: (
+                    lambda graph_fci, _edges: make_case(
+                        "fci.simple1.dsep.bk",
+                        "fci",
+                        {
+                            "observedCount": 4,
+                            "totalNodes": 4,
+                            "alpha": 0.05,
+                            "ciTest": "d-separation",
+                            "backgroundKnowledge": {
+                                "forbidden": [["X1", "X2"], ["X2", "X1"]]
+                            },
+                        },
+                        graph_output_summary(graph_fci),
+                        {"graphMatrix": graph_matrix(graph_fci)},
+                    )
+                )(*run_silenced(lambda: fci(np.empty(shape=(0, 4)), d_separation, 0.05, verbose=False, show_progress=False, true_dag=dag, background_knowledge=bk)))
+            )(
+                (
+                    lambda bk: (
+                        bk.add_forbidden_by_node(GraphNode("X1"), GraphNode("X2")),
+                        bk.add_forbidden_by_node(GraphNode("X2"), GraphNode("X1")),
+                        bk,
+                    )[2]
+                )(BackgroundKnowledge())
+            )
+        )(__import__("networkx").DiGraph([(0, 1), (0, 2), (1, 3), (2, 3)]))
     )
 
     append_case(

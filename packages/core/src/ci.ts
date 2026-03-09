@@ -1,3 +1,4 @@
+import { CausalGraph } from "./graph";
 import type { NumericMatrix, ConditionalIndependenceTest } from "./stats";
 
 function mean(values: readonly number[]): number {
@@ -445,5 +446,109 @@ export class GSquareTest extends DiscreteConditionalIndependenceTest {
 
   protected useGSquare(): boolean {
     return true;
+  }
+}
+
+type DSeparationDirection = "up" | "down";
+
+export class DSeparationTest implements ConditionalIndependenceTest {
+  readonly name = "d-separation";
+
+  private readonly observedNodeIds: string[];
+
+  constructor(
+    private readonly dag: CausalGraph,
+    observedNodeIds?: readonly string[]
+  ) {
+    if (dag.hasDirectedCycle()) {
+      throw new Error("DSeparationTest requires an acyclic directed graph.");
+    }
+
+    const resolvedObservedNodeIds = observedNodeIds
+      ? [...observedNodeIds]
+      : dag.getNodeIds();
+
+    for (const nodeId of resolvedObservedNodeIds) {
+      dag.getNodeIndex(nodeId);
+    }
+
+    this.observedNodeIds = resolvedObservedNodeIds;
+  }
+
+  test(x: number, y: number, conditioningSet?: readonly number[]): number {
+    const xId = this.getObservedNodeId(x);
+    const yId = this.getObservedNodeId(y);
+    const conditioningIds = formatConditioningSet(conditioningSet).map((index) =>
+      this.getObservedNodeId(index)
+    );
+
+    if (conditioningIds.includes(xId) || conditioningIds.includes(yId)) {
+      throw new Error("Conditioning set cannot contain the tested variables.");
+    }
+
+    const dConnected = this.isDConnected(xId, yId, new Set(conditioningIds));
+    return dConnected ? 0 : 1;
+  }
+
+  private getObservedNodeId(index: number): string {
+    const nodeId = this.observedNodeIds[index];
+    if (!nodeId) {
+      throw new Error(`Unknown observed node index: ${index}`);
+    }
+    return nodeId;
+  }
+
+  private isDConnected(source: string, target: string, conditioned: ReadonlySet<string>): boolean {
+    const ancestorsOfConditioned = new Set([...conditioned, ...this.dag.getAncestorIds([...conditioned])]);
+    const queue: Array<{ nodeId: string; direction: DSeparationDirection }> = [
+      { nodeId: source, direction: "up" },
+      { nodeId: source, direction: "down" }
+    ];
+    const visited = new Set<string>();
+
+    while (queue.length > 0) {
+      const current = queue.shift();
+      if (!current) {
+        continue;
+      }
+
+      const visitKey = `${current.nodeId}:${current.direction}`;
+      if (visited.has(visitKey)) {
+        continue;
+      }
+      visited.add(visitKey);
+
+      if (current.nodeId === target) {
+        return true;
+      }
+
+      if (current.direction === "up") {
+        if (conditioned.has(current.nodeId)) {
+          continue;
+        }
+
+        for (const parentId of this.dag.getParentIds(current.nodeId)) {
+          queue.push({ nodeId: parentId, direction: "up" });
+        }
+        for (const childId of this.dag.getChildIds(current.nodeId)) {
+          queue.push({ nodeId: childId, direction: "down" });
+        }
+        continue;
+      }
+
+      if (!conditioned.has(current.nodeId)) {
+        for (const childId of this.dag.getChildIds(current.nodeId)) {
+          queue.push({ nodeId: childId, direction: "down" });
+        }
+      }
+
+      if (ancestorsOfConditioned.has(current.nodeId)) {
+        for (const parentId of this.dag.getParentIds(current.nodeId)) {
+          queue.push({ nodeId: parentId, direction: "up" });
+        }
+      }
+    }
+
+    return false;
   }
 }

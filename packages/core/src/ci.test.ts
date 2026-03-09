@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { ChiSquareTest, FisherZTest, GSquareTest } from "./ci";
+import { ChiSquareTest, DSeparationTest, FisherZTest, GSquareTest } from "./ci";
+import { CausalGraph } from "./graph";
 import { DenseMatrix } from "./stats";
 
 function buildChainData(sampleSize: number): DenseMatrix {
@@ -65,5 +66,30 @@ describe("GSquareTest", () => {
     const ci = new GSquareTest(buildDiscreteCommonCauseData(400));
     expect(ci.test(0, 1)).toBeLessThan(0.05);
     expect(ci.test(0, 1, [2])).toBeGreaterThan(0.05);
+  });
+});
+
+describe("DSeparationTest", () => {
+  it("detects blocked and unblocked paths in a collider", () => {
+    const dag = CausalGraph.fromNodeIds(["X1", "X2", "X3", "X4"]);
+    dag.orientEdge("X1", "X3");
+    dag.orientEdge("X2", "X3");
+    dag.orientEdge("X3", "X4");
+
+    const ci = new DSeparationTest(dag);
+    expect(ci.test(0, 1)).toBeGreaterThan(0.5);
+    expect(ci.test(0, 1, [2])).toBe(0);
+    expect(ci.test(0, 1, [3])).toBe(0);
+  });
+
+  it("supports latent nodes outside the observed index space", () => {
+    const dag = CausalGraph.fromNodeIds(["X1", "X2", "X3", "L1"]);
+    dag.orientEdge("L1", "X1");
+    dag.orientEdge("L1", "X2");
+    dag.orientEdge("X2", "X3");
+
+    const ci = new DSeparationTest(dag, ["X1", "X2", "X3"]);
+    expect(ci.test(0, 2)).toBe(0);
+    expect(ci.test(0, 2, [1])).toBeGreaterThan(0.5);
   });
 });
