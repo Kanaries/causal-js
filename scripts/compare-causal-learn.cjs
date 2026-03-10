@@ -5,6 +5,7 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const ROOT = path.resolve(__dirname, "..");
 const FIXTURE_ROOT = path.join(ROOT, "fixtures", "causal-learn", "TestData");
+const CAUSAL_LEARN_TESTDATA_ROOT = path.join(ROOT, "..", "causal-learn", "tests", "TestData");
 const REPORT_PATH = path.join(ROOT, ".workspace", "causal-learn-comparison-report.json");
 
 function loadPackages() {
@@ -23,6 +24,15 @@ function loadPackages() {
 
 function loadTxtMatrix(filename, skipRows = 0) {
   const text = fs.readFileSync(path.join(FIXTURE_ROOT, filename), "utf8").trim();
+  return text
+    .split(/\n+/)
+    .slice(skipRows)
+    .filter(Boolean)
+    .map((line) => line.trim().split(/\s+/).map(Number));
+}
+
+function loadTxtMatrixFrom(rootPath, filename, skipRows = 0) {
+  const text = fs.readFileSync(path.join(rootPath, filename), "utf8").trim();
   return text
     .split(/\n+/)
     .slice(skipRows)
@@ -430,6 +440,39 @@ function runJsCases(core, discovery) {
               ["X2", "X1"]
             ]
           }
+        },
+        graphOutputSummary(result.graph),
+        { graphMatrix: graphMatrix(result.graph) }
+      )
+    );
+  }
+
+  for (const datasetName of [
+    "asia",
+    "cancer",
+    "earthquake",
+    "survey",
+    "sachs",
+    "child"
+  ]) {
+    const data = new DenseMatrix(
+      loadTxtMatrixFrom(CAUSAL_LEARN_TESTDATA_ROOT, `bnlearn_discrete_10000/data/${datasetName}.txt`, 1)
+    );
+    const result = fci({
+      alpha: 0.05,
+      ciTest: new ChiSquareTest(data),
+      data,
+      nodeLabels: createNodeLabels(data.columns)
+    });
+    cases.push(
+      makeCase(
+        `fci.bnlearn.${datasetName}.chisq`,
+        "fci",
+        {
+          dataset: datasetName,
+          data: { rows: data.rows, columns: data.columns },
+          alpha: 0.05,
+          ciTest: "chisq"
         },
         graphOutputSummary(result.graph),
         { graphMatrix: graphMatrix(result.graph) }

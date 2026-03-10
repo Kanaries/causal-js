@@ -192,7 +192,7 @@ function skeletonDiscovery(
 
   while (graph.getMaxDegree() - 1 > depth && (depthLimit < 0 || depth < depthLimit)) {
     depth += 1;
-    const pendingRemoval = new Set<string>();
+    const pendingRemoval = new Map<string, Set<number>>();
 
     for (let x = 0; x < variableCount; x += 1) {
       const neighborsOfX = graph.neighbors(x);
@@ -205,15 +205,16 @@ function skeletonDiscovery(
           continue;
         }
 
+        const stableSepset = new Set<number>();
+
         if (isKnowledgeForbiddenBothWays(options.backgroundKnowledge, graph, x, y)) {
           if (stable) {
-            pendingRemoval.add(pairKey(x, y));
-            pendingRemoval.add(pairKey(y, x));
+            const key = x <= y ? pairKey(x, y) : pairKey(y, x);
+            pendingRemoval.set(key, pendingRemoval.get(key) ?? stableSepset);
           } else {
             graph.removeEdge(graph.getNodeIdAt(x), graph.getNodeIdAt(y));
             setSepset(sepsets, x, y, []);
           }
-          continue;
         }
 
         const possibleNeighbors = graph.neighbors(x).filter((candidate) => candidate !== y);
@@ -221,34 +222,32 @@ function skeletonDiscovery(
           continue;
         }
 
-        let found = false;
-
         for (const conditioningSet of combinations(possibleNeighbors, depth)) {
           const pValue = ciTest.test(x, y, conditioningSet);
           if (pValue > alpha) {
             if (stable) {
-              pendingRemoval.add(pairKey(x, y));
-              pendingRemoval.add(pairKey(y, x));
+              const key = x <= y ? pairKey(x, y) : pairKey(y, x);
+              const mergedSet = pendingRemoval.get(key) ?? stableSepset;
+              for (const value of conditioningSet) {
+                mergedSet.add(value);
+              }
+              pendingRemoval.set(key, mergedSet);
             } else {
               graph.removeEdge(graph.getNodeIdAt(x), graph.getNodeIdAt(y));
+              setSepset(sepsets, x, y, conditioningSet);
+              break;
             }
-            setSepset(sepsets, x, y, conditioningSet);
-            found = true;
-            break;
           }
-        }
-
-        if (!stable || found) {
-          continue;
         }
       }
     }
 
-    for (const key of pendingRemoval) {
+    for (const [key, conditioningSet] of pendingRemoval.entries()) {
       const [xText, yText] = key.split(":");
       const x = Number(xText);
       const y = Number(yText);
       graph.removeEdge(graph.getNodeIdAt(x), graph.getNodeIdAt(y));
+      setSepset(sepsets, x, y, [...conditioningSet]);
     }
   }
 

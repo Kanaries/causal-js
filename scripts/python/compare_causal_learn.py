@@ -35,6 +35,7 @@ from causallearn.utils.cit import chisq, d_separation, fisherz, gsq
 
 
 FIXTURE_ROOT = ROOT / "fixtures" / "causal-learn" / "TestData"
+CAUSAL_LEARN_TESTDATA_ROOT = CAUSAL_LEARN_ROOT / "tests" / "TestData"
 
 
 def load_txt_matrix(filename: str, skip_rows: int = 0) -> np.ndarray:
@@ -378,6 +379,35 @@ def run_cases() -> list[dict[str, Any]]:
             )
         )(__import__("networkx").DiGraph([(0, 1), (0, 2), (1, 3), (2, 3)]))
     )
+
+    for dataset_name in (
+        "asia",
+        "cancer",
+        "earthquake",
+        "survey",
+        "sachs",
+        "child",
+    ):
+        append_case(
+            cases,
+            f"fci.bnlearn.{dataset_name}.chisq",
+            lambda dataset_name=dataset_name: (
+                lambda data_bnlearn: (
+                    lambda graph_fci, _edges: make_case(
+                        f"fci.bnlearn.{dataset_name}.chisq",
+                        "fci",
+                        {
+                            "dataset": dataset_name,
+                            "data": {"rows": int(data_bnlearn.shape[0]), "columns": int(data_bnlearn.shape[1])},
+                            "alpha": 0.05,
+                            "ciTest": "chisq",
+                        },
+                        graph_output_summary(graph_fci),
+                        {"graphMatrix": graph_matrix(graph_fci)},
+                    )
+                )(*run_silenced(lambda: fci(data_bnlearn, chisq, 0.05, verbose=False, show_progress=False)))
+            )(np.loadtxt(CAUSAL_LEARN_TESTDATA_ROOT / "bnlearn_discrete_10000" / "data" / f"{dataset_name}.txt", skiprows=1))
+        )
 
     append_case(
         cases,
