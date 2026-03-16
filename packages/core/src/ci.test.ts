@@ -1,8 +1,26 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it } from "vitest";
 
 import { ChiSquareTest, DSeparationTest, FisherZTest, GSquareTest } from "./ci";
 import { CausalGraph } from "./graph";
 import { DenseMatrix } from "./stats";
+
+const fixtureRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../../fixtures/causal-learn/TestData"
+);
+
+function loadTxtMatrix(filename: string, skipRows = 0): number[][] {
+  const text = readFileSync(path.join(fixtureRoot, filename), "utf8").trim();
+  return text
+    .split(/\n+/)
+    .slice(skipRows)
+    .filter(Boolean)
+    .map((line) => line.trim().split(/\s+/).map(Number));
+}
 
 function buildChainData(sampleSize: number): DenseMatrix {
   const rows = Array.from({ length: sampleSize }, (_, index) => {
@@ -59,6 +77,11 @@ describe("ChiSquareTest", () => {
     expect(ci.test(0, 1)).toBeLessThan(0.05);
     expect(ci.test(0, 1, [2])).toBeGreaterThan(0.05);
   });
+
+  it("matches the oracle p-value on the selected discrete_10 parity query", () => {
+    const ci = new ChiSquareTest(new DenseMatrix(loadTxtMatrix("data_discrete_10.txt", 1)));
+    expect(ci.test(0, 1)).toBeCloseTo(0.42125572675039813, 10);
+  });
 });
 
 describe("GSquareTest", () => {
@@ -66,6 +89,11 @@ describe("GSquareTest", () => {
     const ci = new GSquareTest(buildDiscreteCommonCauseData(400));
     expect(ci.test(0, 1)).toBeLessThan(0.05);
     expect(ci.test(0, 1, [2])).toBeGreaterThan(0.05);
+  });
+
+  it("matches the oracle p-value on the selected discrete_10 parity query", () => {
+    const ci = new GSquareTest(new DenseMatrix(loadTxtMatrix("data_discrete_10.txt", 1)));
+    expect(ci.test(0, 1, [2])).toBeCloseTo(0.01499623687164405, 10);
   });
 });
 

@@ -82,10 +82,15 @@ This baseline has now passed the current V1 acceptance run:
 - `pnpm build`
 - `pnpm test`
 - `pnpm test:integration`
-- `pnpm compare:causal-learn`
+- `pnpm parity:quick`
+- `pnpm parity:full`
 
-The current cross-language comparison suite passes `30/30` cases against
-`causal-learn`.
+`pnpm compare:causal-learn` remains as a compatibility alias to the `full` parity profile.
+
+Current parity baseline:
+
+- `quick`: `17/17` pass
+- `full`: `46/46` pass
 
 ## V1 Status
 
@@ -108,6 +113,7 @@ The practical meaning is:
 - `CAM_UV` is accepted for V1 on the current comparison suite, while still keeping a portable smoother instead of a literal `pygam.LinearGAM` dependency
 
 See [v1-status.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/v1-status.md) for the exact boundaries.
+See [parity.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/testing/parity.md) for the parity harness contract and report format.
 
 ## Stable Entry Points
 

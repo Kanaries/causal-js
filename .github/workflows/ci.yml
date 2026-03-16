@@ -1,0 +1,133 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+  schedule:
+    - cron: "0 7 * * *"
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8.6.12
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build
+        run: pnpm build
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Integration tests
+        run: pnpm test:integration
+
+  parity-quick:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: py-why/causal-learn
+          ref: f66d0f9841eb478c3dcb0b61a9cc5c419fd46fb6
+          path: causal-learn-oracle
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8.6.12
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Quick parity
+        run: pnpm parity:quick -- --oracle-root "$GITHUB_WORKSPACE/causal-learn-oracle" --python python3.10
+
+      - name: Upload parity reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity-quick-report
+          path: parity/results/
+
+  parity-nightly:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: py-why/causal-learn
+          ref: f66d0f9841eb478c3dcb0b61a9cc5c419fd46fb6
+          path: causal-learn-oracle
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8.6.12
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Fetch recent parity artifacts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm parity:fetch-history -- --repo "$GITHUB_REPOSITORY" --artifact parity-quick-report --artifact parity-benchmark-report --limit 12
+
+      - name: Benchmark parity
+        run: pnpm parity:benchmark -- --oracle-root "$GITHUB_WORKSPACE/causal-learn-oracle" --python python3.10
+
+      - name: Render parity history
+        run: pnpm parity:history
+
+      - name: Upload benchmark parity reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity-benchmark-report
+          path: parity/results/

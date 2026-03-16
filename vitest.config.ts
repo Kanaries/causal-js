@@ -10,6 +10,7 @@ export default defineConfig({
     }
   },
   test: {
-    include: ["packages/*/src/**/*.test.ts", "tests/production-integrity.test.ts"]
+    include: ["packages/*/src/**/*.test.ts", "tests/**/*.test.ts"],
+    exclude: ["tests/**/*.integration.test.ts"]
   }
 });

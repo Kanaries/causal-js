@@ -1,6 +1,6 @@
 # V1 Status
 
-Last updated: 2026-03-08
+Last updated: 2026-03-16
 
 This document records the current `causal-js` baseline against `causal-learn`.
 The current V1 baseline has completed the acceptance run:
@@ -9,9 +9,15 @@ The current V1 baseline has completed the acceptance run:
 - `pnpm build`
 - `pnpm test`
 - `pnpm test:integration`
-- `pnpm compare:causal-learn`
+- `pnpm parity:quick`
+- `pnpm parity:full`
 
-The comparison harness currently passes `30/30` JS vs Python cases.
+`pnpm compare:causal-learn` remains as a compatibility alias to the `full` parity profile.
+
+Current parity baseline:
+
+- `quick`: `17/17` pass
+- `full`: `46/46` pass
 
 This document is intentionally strict about the difference between:
 
@@ -35,6 +41,8 @@ The first requested algorithm wave is accepted for the current V1 target.
 The correct next step is no longer to prove the baseline exists. The correct
 next step is to preserve the accepted boundary and avoid widening scope
 accidentally.
+
+The parity contract now lives in [testing/parity.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/testing/parity.md).
 
 ## Status Matrix
 

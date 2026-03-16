@@ -142,16 +142,103 @@ function normalCdf(value: number): number {
   return 0.5 * (1 + erf);
 }
 
+function logGamma(value: number): number {
+  if (value <= 0) {
+    throw new Error(`logGamma is only defined for positive values, got ${value}`);
+  }
+
+  const coefficients = [
+    676.5203681218851,
+    -1259.1392167224028,
+    771.3234287776531,
+    -176.6150291621406,
+    12.507343278686905,
+    -0.13857109526572012,
+    9.984369578019572e-6,
+    1.5056327351493116e-7
+  ];
+  const g = 7;
+
+  if (value < 0.5) {
+    return Math.log(Math.PI) - Math.log(Math.sin(Math.PI * value)) - logGamma(1 - value);
+  }
+
+  let sum = 0.9999999999998099;
+  const shifted = value - 1;
+  for (let index = 0; index < coefficients.length; index += 1) {
+    sum += coefficients[index]! / (shifted + index + 1);
+  }
+
+  const t = shifted + g + 0.5;
+  return 0.5 * Math.log(2 * Math.PI) + (shifted + 0.5) * Math.log(t) - t + Math.log(sum);
+}
+
+function regularizedGammaP(a: number, x: number): number {
+  if (x <= 0) {
+    return 0;
+  }
+
+  const tolerance = 1e-12;
+  const maxIterations = 1000;
+  let sum = 1 / a;
+  let term = sum;
+
+  for (let iteration = 1; iteration <= maxIterations; iteration += 1) {
+    term *= x / (a + iteration);
+    sum += term;
+    if (Math.abs(term) <= Math.abs(sum) * tolerance) {
+      break;
+    }
+  }
+
+  return Math.exp(-x + a * Math.log(x) - logGamma(a)) * sum;
+}
+
+function regularizedGammaQ(a: number, x: number): number {
+  if (x <= 0) {
+    return 1;
+  }
+
+  if (x < a + 1) {
+    return 1 - regularizedGammaP(a, x);
+  }
+
+  const tolerance = 1e-12;
+  const maxIterations = 1000;
+  const tiny = 1e-30;
+  let b = x + 1 - a;
+  let c = 1 / tiny;
+  let d = 1 / Math.max(b, tiny);
+  let h = d;
+
+  for (let iteration = 1; iteration <= maxIterations; iteration += 1) {
+    const an = -iteration * (iteration - a);
+    b += 2;
+    d = an * d + b;
+    if (Math.abs(d) < tiny) {
+      d = tiny;
+    }
+    c = b + an / c;
+    if (Math.abs(c) < tiny) {
+      c = tiny;
+    }
+    d = 1 / d;
+    const delta = d * c;
+    h *= delta;
+    if (Math.abs(delta - 1) <= tolerance) {
+      break;
+    }
+  }
+
+  return Math.exp(-x + a * Math.log(x) - logGamma(a)) * h;
+}
+
 function chiSquareSurvival(statistic: number, degreesOfFreedom: number): number {
   if (degreesOfFreedom <= 0) {
     return 1;
   }
 
-  // Wilson-Hilferty approximation.
-  const transformed =
-    (Math.pow(statistic / degreesOfFreedom, 1 / 3) - (1 - 2 / (9 * degreesOfFreedom))) /
-    Math.sqrt(2 / (9 * degreesOfFreedom));
-  return 1 - normalCdf(transformed);
+  return regularizedGammaQ(degreesOfFreedom / 2, statistic / 2);
 }
 
 function formatConditioningSet(conditioningSet?: readonly number[]): number[] {
