@@ -1,6 +1,7 @@
-import { CausalGraph } from "@causal-js/core";
+import { CausalGraph, GRAPH_KIND, dagToCpdag, pdagToDag } from "@causal-js/core";
 
 import type { GesOptions, GesResult } from "./contracts";
+import { finalizeGraphShape } from "./graph-result";
 
 function createNodeLabels(variableCount: number, nodeLabels?: readonly string[]): string[] {
   if (!nodeLabels) {
@@ -254,233 +255,13 @@ function applyDelete(
   return candidate;
 }
 
-function checkPdagSink(graph: CausalGraph, nodeIndex: number, active: ReadonlySet<number>): boolean {
-  const neighbors = getUndirectedNeighborIndices(graph, nodeIndex).filter((index) => active.has(index));
-  const adjacent = getAdjacentIndices(graph, nodeIndex).filter((index) => active.has(index));
-
-  for (const neighbor of neighbors) {
-    for (const candidate of adjacent) {
-      if (candidate === neighbor) {
-        continue;
-      }
-
-      if (!graph.isAdjacentTo(graph.getNodeIdAt(neighbor), graph.getNodeIdAt(candidate))) {
-        return false;
-      }
-    }
-  }
-
-  return true;
-}
-
-function pdagToDag(cpdag: CausalGraph): CausalGraph {
-  const dag = new CausalGraph(cpdag.getNodes());
-  for (const edge of cpdag.getDirectedEdgePairs()) {
-    dag.addDirectedEdge(edge.from, edge.to);
-  }
-
-  const active = new Set<number>(Array.from({ length: cpdag.size }, (_, index) => index));
-  while (active.size > 0) {
-    let removed = false;
-
-    for (let nodeIndex = 0; nodeIndex < cpdag.size; nodeIndex += 1) {
-      if (!active.has(nodeIndex)) {
-        continue;
-      }
-
-      const activeChildren = getChildIndices(cpdag, nodeIndex).filter((index) => active.has(index));
-      if (activeChildren.length > 0) {
-        continue;
-      }
-
-      if (!checkPdagSink(cpdag, nodeIndex, active)) {
-        continue;
-      }
-
-      const nodeId = cpdag.getNodeIdAt(nodeIndex);
-      for (const neighborIndex of getUndirectedNeighborIndices(cpdag, nodeIndex).filter((index) =>
-        active.has(index)
-      )) {
-        dag.addDirectedEdge(cpdag.getNodeIdAt(neighborIndex), nodeId);
-      }
-
-      active.delete(nodeIndex);
-      removed = true;
-      break;
-    }
-
-    if (!removed) {
-      throw new Error("Failed to find a consistent extension for the current PDAG.");
-    }
-  }
-
-  return dag;
-}
-
-function getTopologicalOrder(graph: CausalGraph): number[] {
-  const indegree = Array.from({ length: graph.size }, (_, index) => getParentIndices(graph, index).length);
-  const queue = indegree
-    .map((degree, index) => ({ degree, index }))
-    .filter((entry) => entry.degree === 0)
-    .map((entry) => entry.index)
-    .sort((left, right) => left - right);
-  const order: number[] = [];
-
-  while (queue.length > 0) {
-    const current = queue.shift();
-    if (current === undefined) {
-      continue;
-    }
-
-    order.push(current);
-    for (const child of getChildIndices(graph, current)) {
-      indegree[child]! -= 1;
-      if (indegree[child] === 0) {
-        queue.push(child);
-        queue.sort((left, right) => left - right);
-      }
-    }
-  }
-
-  if (order.length !== graph.size) {
-    throw new Error("Expected a DAG when constructing a CPDAG.");
-  }
-
-  return order;
-}
-
-function dagToCpdag(graph: CausalGraph): CausalGraph {
-  const orderedNodes = getTopologicalOrder(graph);
-  const edges = graph.getDirectedEdgePairs().map((edge) => [
-    graph.getNodeIndex(edge.from),
-    graph.getNodeIndex(edge.to)
-  ] as const);
-  const orderedEdges: Array<readonly [number, number]> = [];
-
-  while (orderedEdges.length < edges.length) {
-    let target = -1;
-
-    for (let targetOrder = orderedNodes.length - 1; targetOrder >= 0; targetOrder -= 1) {
-      const candidateTarget = orderedNodes[targetOrder]!;
-      const incidentParents = getParentIndices(graph, candidateTarget);
-      if (incidentParents.length === 0) {
-        continue;
-      }
-
-      const orderedParents = orderedEdges
-        .filter(([, child]) => child === candidateTarget)
-        .map(([parent]) => parent);
-
-      if (incidentParents.some((parent) => !orderedParents.includes(parent))) {
-        target = candidateTarget;
-        break;
-      }
-    }
-
-    if (target < 0) {
-      throw new Error("Failed to order DAG edges for CPDAG conversion.");
-    }
-
-    for (const source of orderedNodes) {
-      const alreadyOrdered = orderedEdges.some(([parent, child]) => parent === source && child === target);
-      if (!alreadyOrdered && graph.isParentOf(graph.getNodeIdAt(source), graph.getNodeIdAt(target))) {
-        orderedEdges.push([source, target]);
-        break;
-      }
-    }
-  }
-
-  const labels = Array.from({ length: orderedEdges.length }, () => 0);
-  while (labels.includes(0)) {
-    let edgeIndex = -1;
-    for (let index = orderedEdges.length - 1; index >= 0; index -= 1) {
-      if (labels[index] === 0) {
-        edgeIndex = index;
-        break;
-      }
-    }
-
-    if (edgeIndex < 0) {
-      break;
-    }
-
-    const [from, to] = orderedEdges[edgeIndex]!;
-    let forced = false;
-
-    for (let parentEdgeIndex = 0; parentEdgeIndex < orderedEdges.length; parentEdgeIndex += 1) {
-      const [parent, child] = orderedEdges[parentEdgeIndex]!;
-      if (child !== from || labels[parentEdgeIndex] !== 1) {
-        continue;
-      }
-
-      if (!graph.isParentOf(graph.getNodeIdAt(parent), graph.getNodeIdAt(to))) {
-        for (let labelIndex = 0; labelIndex < orderedEdges.length; labelIndex += 1) {
-          if (orderedEdges[labelIndex]![1] === to) {
-            labels[labelIndex] = 1;
-          }
-        }
-        forced = true;
-        break;
-      }
-
-      const targetEdgeIndex = orderedEdges.findIndex(
-        ([candidateParent, candidateChild]) => candidateParent === parent && candidateChild === to
-      );
-      if (targetEdgeIndex >= 0) {
-        labels[targetEdgeIndex] = 1;
-      }
-    }
-
-    if (forced) {
-      continue;
-    }
-
-    const otherParents = getParentIndices(graph, to).filter((parent) => parent !== from);
-    const compelled = otherParents.some(
-      (parent) => !graph.isParentOf(graph.getNodeIdAt(parent), graph.getNodeIdAt(from))
-    );
-
-    if (compelled) {
-      labels[edgeIndex] = 1;
-      for (let labelIndex = 0; labelIndex < orderedEdges.length; labelIndex += 1) {
-        if (orderedEdges[labelIndex]![1] === to && labels[labelIndex] === 0) {
-          labels[labelIndex] = 1;
-        }
-      }
-      continue;
-    }
-
-    labels[edgeIndex] = -1;
-    for (let labelIndex = 0; labelIndex < orderedEdges.length; labelIndex += 1) {
-      if (orderedEdges[labelIndex]![1] === to && labels[labelIndex] === 0) {
-        labels[labelIndex] = -1;
-      }
-    }
-  }
-
-  const cpdag = new CausalGraph(graph.getNodes());
-  for (let index = 0; index < orderedEdges.length; index += 1) {
-    const [from, to] = orderedEdges[index]!;
-    const fromId = graph.getNodeIdAt(from);
-    const toId = graph.getNodeIdAt(to);
-
-    if (labels[index] === 1) {
-      cpdag.addDirectedEdge(fromId, toId);
-    } else {
-      cpdag.addUndirectedEdge(fromId, toId);
-    }
-  }
-
-  return cpdag;
-}
-
 export function ges(options: GesOptions): GesResult {
   const variableCount = options.data.columns;
   const nodeLabels = createNodeLabels(variableCount, options.nodeLabels);
   let cpdag = new CausalGraph(nodeLabels.map((id) => ({ id })));
   const maxParents = options.maxParents ?? variableCount / 2;
 
-  let currentScore = totalScore(pdagToDag(cpdag), variableCount, options.score);
+  let currentScore = totalScore(CausalGraph.fromShape(pdagToDag(cpdag).toShape()), variableCount, options.score);
   let forwardSteps = 0;
   let backwardSteps = 0;
   let reverseSteps = 0;
@@ -521,7 +302,9 @@ export function ges(options: GesOptions): GesResult {
       break;
     }
 
-    cpdag = dagToCpdag(pdagToDag(applyInsert(cpdag, bestMove.from, bestMove.to, bestMove.subset)));
+    cpdag = CausalGraph.fromShape(
+      dagToCpdag(pdagToDag(applyInsert(cpdag, bestMove.from, bestMove.to, bestMove.subset))).toShape()
+    );
     forwardSteps += 1;
 
     currentScore += bestDelta;
@@ -562,15 +345,23 @@ export function ges(options: GesOptions): GesResult {
       break;
     }
 
-    cpdag = dagToCpdag(pdagToDag(applyDelete(cpdag, bestMove.from, bestMove.to, bestMove.subset)));
+    cpdag = CausalGraph.fromShape(
+      dagToCpdag(pdagToDag(applyDelete(cpdag, bestMove.from, bestMove.to, bestMove.subset))).toShape()
+    );
     backwardSteps += 1;
 
     currentScore += bestDelta;
   }
 
   return {
-    dag: pdagToDag(cpdag).toShape(),
-    cpdag: cpdag.toShape(),
+    dag: finalizeGraphShape(CausalGraph.fromShape(pdagToDag(cpdag).toShape()), {
+      algorithm: "ges",
+      preferredKind: GRAPH_KIND.dag
+    }),
+    cpdag: finalizeGraphShape(cpdag, {
+      algorithm: "ges",
+      preferredKind: GRAPH_KIND.cpdag
+    }),
     forwardSteps,
     backwardSteps,
     reverseSteps,

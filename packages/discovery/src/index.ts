@@ -5,6 +5,7 @@ export * from "./contracts";
 export * from "./exact-search";
 export * from "./fci";
 export * from "./ges";
+export * from "./graph-result";
 export * from "./gin";
 export * from "./grasp";
 export * from "./pc";

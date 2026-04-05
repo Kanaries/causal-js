@@ -114,6 +114,8 @@ describe("fci", () => {
       nodeLabels: createNodeLabels(data.columns)
     });
 
+    expect(result.graph.kind).toBe("pag");
+    expect(result.graph.metadata?.algorithm).toBe("fci");
     const received = toCausalLearnMatrix(CausalGraph.fromShape(result.graph));
 
     expect(toAdjacencyMask(received)).toEqual(toAdjacencyMask(expected));

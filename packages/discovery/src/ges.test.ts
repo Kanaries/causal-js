@@ -72,6 +72,9 @@ describe("ges", () => {
       { node1: "X", node2: "Z", endpoint1: "tail", endpoint2: "tail" },
       { node1: "Y", node2: "Z", endpoint1: "tail", endpoint2: "tail" }
     ]);
+    expect(result.cpdag.kind).toBe("cpdag");
+    expect(result.cpdag.metadata?.algorithm).toBe("ges");
+    expect(result.dag.kind).toBe("dag");
     expect(result.forwardSteps).toBeGreaterThan(0);
   });
 

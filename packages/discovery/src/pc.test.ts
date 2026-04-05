@@ -115,6 +115,9 @@ describe("pc", () => {
       { node1: "X", node2: "Z", endpoint1: "tail", endpoint2: "arrow" },
       { node1: "Y", node2: "Z", endpoint1: "tail", endpoint2: "arrow" }
     ]);
+    expect(result.graph.kind).toBe("cpdag");
+    expect(result.graph.metadata?.algorithm).toBe("pc");
+    expect(result.graph.metadata?.graphKindResolution).toBe("preferred");
   });
 
   it("accepts the default causal-learn-compatible ucRule and ucPriority pair", () => {

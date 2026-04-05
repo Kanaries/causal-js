@@ -40,6 +40,9 @@ describe("exactSearch", () => {
       nodeLabels: ["A", "B", "C"]
     });
 
+    expect(result.dag.kind).toBe("dag");
+    expect(result.cpdag.kind).toBe("cpdag");
+    expect(result.dag.metadata?.algorithm).toBe("exact-search");
     expect(result.dag.edges).toEqual([
       { node1: "A", node2: "B", endpoint1: "tail", endpoint2: "arrow" },
       { node1: "B", node2: "C", endpoint1: "tail", endpoint2: "arrow" }

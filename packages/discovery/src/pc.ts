@@ -1,6 +1,7 @@
-import { CausalGraph, EDGE_ENDPOINT, type BackgroundKnowledge } from "@causal-js/core";
+import { CausalGraph, EDGE_ENDPOINT, GRAPH_KIND, type BackgroundKnowledge } from "@causal-js/core";
 
 import type { PcOptions, PcResult, PcSkeletonResult, SeparationSetEntry } from "./contracts";
+import { finalizeGraphShape } from "./graph-result";
 
 function createNodeLabels(variableCount: number, nodeLabels?: readonly string[]): string[] {
   if (!nodeLabels) {
@@ -806,7 +807,10 @@ export function skeletonDiscovery(options: PcOptions): PcSkeletonResult {
   }
 
   return {
-    graph: graph.toShape(),
+    graph: finalizeGraphShape(graph, {
+      algorithm: "pc",
+      metadata: { stage: "skeleton" }
+    }),
     maxDepth: depth,
     sepsets: serializeSepsets(sepsets),
     testsRun
@@ -820,6 +824,10 @@ export function pc(options: PcOptions): PcResult {
 
   return {
     ...skeleton,
-    graph: graph.toShape()
+    graph: finalizeGraphShape(graph, {
+      algorithm: "pc",
+      preferredKind: GRAPH_KIND.cpdag,
+      fallbackKind: GRAPH_KIND.generic
+    })
   };
 }

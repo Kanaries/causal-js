@@ -21,7 +21,7 @@ browser-only algorithms harder to reason about and harder to release safely.
 
 Portable foundations:
 
-- graph data structures
+- graph data structures and Graph IR semantics
 - endpoint and edge types
 - background knowledge types
 - dataset and matrix contracts
@@ -29,6 +29,13 @@ Portable foundations:
 - shared error types
 
 This package must not depend on Node.js APIs, DOM APIs, or GPU APIs.
+
+The graph layer should be treated as a stable intermediate representation:
+
+- explicit graph kind (`dag`, `cpdag`, `pag`, `admg`, `generic`)
+- explicit edge endpoints instead of string-composed edge labels
+- JSON-serializable graph/node/edge metadata
+- compatibility adapters for legacy graph shapes
 
 ### `@causal-js/discovery`
 

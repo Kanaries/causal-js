@@ -1,6 +1,7 @@
-import { CausalGraph } from "@causal-js/core";
+import { CausalGraph, GRAPH_KIND } from "@causal-js/core";
 
 import type { GraspOptions, GraspResult } from "./contracts";
+import { finalizeGraphShape } from "./graph-result";
 import { dagToCpdag } from "./graph-conversion";
 
 function createNodeLabels(variableCount: number, nodeLabels?: readonly string[]): string[] {
@@ -426,7 +427,7 @@ export function grasp(options: GraspOptions): GraspResult {
     }
   }
 
-  const dag = new CausalGraph(nodeLabels.map((id) => ({ id })));
+  const dag = new CausalGraph(nodeLabels.map((id) => ({ id })), { kind: GRAPH_KIND.dag });
   for (let node = 0; node < variableCount; node += 1) {
     for (const parent of order.getParents(node)) {
       dag.addDirectedEdge(nodeLabels[parent]!, nodeLabels[node]!);
@@ -435,8 +436,14 @@ export function grasp(options: GraspOptions): GraspResult {
 
   const cpdag = dagToCpdag(dag);
   return {
-    dag: dag.toShape(),
-    cpdag: cpdag.toShape(),
+    dag: finalizeGraphShape(dag, {
+      algorithm: "grasp",
+      preferredKind: GRAPH_KIND.dag
+    }),
+    cpdag: finalizeGraphShape(cpdag, {
+      algorithm: "grasp",
+      preferredKind: GRAPH_KIND.cpdag
+    }),
     order: [...order.order],
     edgeCount: order.getEdges(),
     score: totalDagScore(order),

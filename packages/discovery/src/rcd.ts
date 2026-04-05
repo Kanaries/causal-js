@@ -1,6 +1,7 @@
-import { CausalGraph, EDGE_ENDPOINT, NODE_TYPE } from "@causal-js/core";
+import { CausalGraph, EDGE_ENDPOINT, GRAPH_KIND, NODE_TYPE } from "@causal-js/core";
 
 import type { RcdOptions, RcdResult } from "./contracts";
+import { finalizeGraphShape } from "./graph-result";
 
 type BandwidthMethod = NonNullable<RcdOptions["bwMethod"]>;
 
@@ -1278,7 +1279,8 @@ export function rcd(options: RcdOptions): RcdResult {
       label,
       nodeType: NODE_TYPE.measured,
       attributes: { originalIndex: index }
-    }))
+    })),
+    { kind: GRAPH_KIND.admg }
   );
 
   for (let child = 0; child < parents.length; child += 1) {
@@ -1296,7 +1298,10 @@ export function rcd(options: RcdOptions): RcdResult {
   }
 
   return {
-    graph: graph.toShape(),
+    graph: finalizeGraphShape(graph, {
+      algorithm: "rcd",
+      preferredKind: GRAPH_KIND.admg
+    }),
     parents: parents.map((entry) => [...entry].sort((left, right) => left - right)),
     ancestors: ancestors.map((entry) => [...entry].sort((left, right) => left - right)),
     confoundedPairs: confounded.flatMap((entry, left) =>

@@ -1,6 +1,7 @@
-import { CausalGraph, type NumericMatrix } from "@causal-js/core";
+import { CausalGraph, GRAPH_KIND, type NumericMatrix } from "@causal-js/core";
 
 import type { ExactSearchOptions, ExactSearchResult } from "./contracts";
+import { finalizeGraphShape } from "./graph-result";
 import { dagToCpdag } from "./graph-conversion";
 
 function createNodeLabels(variableCount: number, nodeLabels?: readonly string[]): string[] {
@@ -78,7 +79,7 @@ function buildDag(
   nodeLabels: readonly string[],
   parentMasks: readonly number[]
 ): CausalGraph {
-  const dag = new CausalGraph(nodeLabels.map((id) => ({ id })));
+  const dag = new CausalGraph(nodeLabels.map((id) => ({ id })), { kind: GRAPH_KIND.dag });
 
   for (let childIndex = 0; childIndex < variableCount; childIndex += 1) {
     for (const parentIndex of maskToIndices(parentMasks[childIndex] ?? 0, variableCount)) {
@@ -203,8 +204,14 @@ export function exactSearch(options: ExactSearchOptions): ExactSearchResult {
   const cpdag = dagToCpdag(dag);
 
   return {
-    dag: dag.toShape(),
-    cpdag: cpdag.toShape(),
+    dag: finalizeGraphShape(dag, {
+      algorithm: "exact-search",
+      preferredKind: GRAPH_KIND.dag
+    }),
+    cpdag: finalizeGraphShape(cpdag, {
+      algorithm: "exact-search",
+      preferredKind: GRAPH_KIND.cpdag
+    }),
     score: bestOrderScore[fullMask]!,
     searchMethod,
     evaluatedOrderStates,

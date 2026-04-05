@@ -72,6 +72,9 @@ describe("grasp", () => {
       randomSeed: 123
     });
 
+    expect(result.dag.kind).toBe("dag");
+    expect(result.cpdag.kind).toBe("cpdag");
+    expect(result.cpdag.metadata?.algorithm).toBe("grasp");
     expect(toCausalLearnMatrix(result)).toEqual(loadTxtMatrix("test_grasp_seed123_cpdag.txt"));
   });
 

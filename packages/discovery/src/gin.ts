@@ -1,5 +1,6 @@
 import {
   CausalGraph,
+  GRAPH_KIND,
   KciUnconditionalTest,
   NODE_TYPE,
   type GraphNode,
@@ -7,6 +8,7 @@ import {
 } from "@causal-js/core";
 
 import type { GinIndependenceTestMethod, GinOptions, GinResult } from "./contracts";
+import { finalizeGraphShape } from "./graph-result";
 
 function createObservedLabels(variableCount: number, nodeLabels?: readonly string[]): string[] {
   if (!nodeLabels) {
@@ -847,7 +849,10 @@ export function gin(options: GinOptions): GinResult {
   }
 
   return {
-    graph: graph.toShape(),
+    graph: finalizeGraphShape(graph, {
+      algorithm: "gin",
+      preferredKind: GRAPH_KIND.generic
+    }),
     causalOrder: causalOrder.map((cluster) => [...cluster]),
     remainingClusters: clustersList.map((cluster) => [...cluster]),
     indepTestMethod

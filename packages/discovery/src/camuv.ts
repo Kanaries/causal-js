@@ -1,6 +1,7 @@
-import { CausalGraph, NODE_TYPE } from "@causal-js/core";
+import { CausalGraph, GRAPH_KIND, NODE_TYPE } from "@causal-js/core";
 
 import type { CamuvOptions, CamuvResult } from "./contracts";
+import { finalizeGraphShape } from "./graph-result";
 
 type BandwidthMethod = NonNullable<CamuvOptions["bwMethod"]>;
 type CamuvSmoother = NonNullable<CamuvOptions["smoother"]>;
@@ -1036,7 +1037,8 @@ export function camuv(options: CamuvOptions): CamuvResult {
       label,
       nodeType: NODE_TYPE.measured,
       attributes: { originalIndex: index }
-    }))
+    })),
+    { kind: GRAPH_KIND.admg }
   );
 
   for (let child = 0; child < parents.length; child += 1) {
@@ -1055,7 +1057,10 @@ export function camuv(options: CamuvOptions): CamuvResult {
   }
 
   return {
-    graph: graph.toShape(),
+    graph: finalizeGraphShape(graph, {
+      algorithm: "cam-uv",
+      preferredKind: GRAPH_KIND.admg
+    }),
     parents: parents.map((entry) => [...entry].sort((left, right) => left - right)),
     confoundedPairs,
     maxExplanatoryVars

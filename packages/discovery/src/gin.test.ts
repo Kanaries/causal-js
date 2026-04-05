@@ -66,6 +66,8 @@ describe("gin", () => {
 
     const latentNodes = result.graph.nodes.filter((node) => node.nodeType === "latent");
     expect(latentNodes.map((node) => node.id)).toEqual(["L1", "L2"]);
+    expect(result.graph.kind).toBe("generic");
+    expect(result.graph.metadata?.algorithm).toBe("gin");
     expect(result.graph.edges).toContainEqual({
       node1: "L1",
       node2: "L2",

@@ -1,6 +1,7 @@
-import { CausalGraph, DenseMatrix, type NumericMatrix } from "@causal-js/core";
+import { CausalGraph, DenseMatrix, GRAPH_KIND, type NumericMatrix } from "@causal-js/core";
 
 import type { CdnodOptions, CdnodResult } from "./contracts";
+import { finalizeGraphShape } from "./graph-result";
 import {
   orientPcGraph,
   skeletonDiscovery
@@ -123,7 +124,15 @@ export function cdnod(options: CdnodOptions): CdnodResult {
 
   return {
     ...skeleton,
-    graph: graph.toShape(),
+    graph: finalizeGraphShape(graph, {
+      algorithm: "cdnod",
+      preferredKind: GRAPH_KIND.cpdag,
+      fallbackKind: GRAPH_KIND.generic,
+      metadata: {
+        contextNodeIndex,
+        observedNodeCount: options.data.columns
+      }
+    }),
     contextNodeIndex,
     observedNodeCount: options.data.columns
   };

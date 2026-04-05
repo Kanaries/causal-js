@@ -1,6 +1,7 @@
-import { CausalGraph, EDGE_ENDPOINT, type BackgroundKnowledge } from "@causal-js/core";
+import { CausalGraph, EDGE_ENDPOINT, GRAPH_KIND, type BackgroundKnowledge } from "@causal-js/core";
 
 import type { FciOptions, FciResult, SeparationSetEntry } from "./contracts";
+import { finalizeGraphShape } from "./graph-result";
 
 type SepsetMap = Map<string, number[]>;
 
@@ -1266,7 +1267,10 @@ export function fci(options: FciOptions): FciResult {
   }
 
   return {
-    graph: graph.toShape(),
+    graph: finalizeGraphShape(graph, {
+      algorithm: "fci",
+      preferredKind: GRAPH_KIND.pag
+    }),
     maxDepth,
     sepsets: serializeSepsets(sepsets),
     testsRun: getCount()
