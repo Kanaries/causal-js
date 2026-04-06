@@ -6,8 +6,6 @@ on:
     branches:
       - main
   workflow_dispatch:
-  schedule:
-    - cron: "0 7 * * *"
 
 jobs:
   build-test:
@@ -40,7 +38,7 @@ jobs:
       - name: Integration tests
         run: pnpm test:integration
 
-  parity-quick:
+  external-regression:
     runs-on: ubuntu-latest
 
     steps:
@@ -48,9 +46,9 @@ jobs:
 
       - uses: actions/checkout@v4
         with:
-          repository: py-why/causal-learn
-          ref: f66d0f9841eb478c3dcb0b61a9cc5c419fd46fb6
-          path: causal-learn-oracle
+          repository: Kanaries/causal-parity
+          path: causal-parity
+          token: ${{ secrets.CAUSAL_PARITY_REPO_TOKEN || github.token }}
 
       - uses: pnpm/action-setup@v4
         with:
@@ -61,73 +59,12 @@ jobs:
           node-version: 20
           cache: pnpm
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-
-      - uses: astral-sh/setup-uv@v5
-
-      - name: Install dependencies
+      - name: Install external regression dependencies
         run: pnpm install --frozen-lockfile
+        working-directory: causal-parity
 
-      - name: Build
-        run: pnpm build
-
-      - name: Quick parity
-        run: pnpm parity:quick -- --oracle-root "$GITHUB_WORKSPACE/causal-learn-oracle" --python python3.10
-
-      - name: Upload parity reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: parity-quick-report
-          path: parity/results/
-
-  parity-nightly:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/checkout@v4
-        with:
-          repository: py-why/causal-learn
-          ref: f66d0f9841eb478c3dcb0b61a9cc5c419fd46fb6
-          path: causal-learn-oracle
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 8.6.12
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-
-      - uses: astral-sh/setup-uv@v5
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Fetch recent parity artifacts
+      - name: External regression tests
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: pnpm parity:fetch-history -- --repo "$GITHUB_REPOSITORY" --artifact parity-quick-report --artifact parity-benchmark-report --limit 12
-
-      - name: Benchmark parity
-        run: pnpm parity:benchmark -- --oracle-root "$GITHUB_WORKSPACE/causal-learn-oracle" --python python3.10
-
-      - name: Render parity history
-        run: pnpm parity:history
-
-      - name: Upload benchmark parity reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: parity-benchmark-report
-          path: parity/results/
+          CAUSAL_JS_SOURCE_ROOT: ${{ github.workspace }}
+        run: pnpm test
+        working-directory: causal-parity

@@ -82,15 +82,7 @@ This baseline has now passed the current V1 acceptance run:
 - `pnpm build`
 - `pnpm test`
 - `pnpm test:integration`
-- `pnpm parity:quick`
-- `pnpm parity:full`
-
-`pnpm compare:causal-learn` remains as a compatibility alias to the `full` parity profile.
-
-Current parity baseline:
-
-- `quick`: `17/17` pass
-- `full`: `46/46` pass
+- external regression suite in `Kanaries/causal-parity`
 
 ## V1 Status
 
@@ -113,7 +105,7 @@ The practical meaning is:
 - `CAM_UV` is accepted for V1 on the current comparison suite, while still keeping a portable smoother instead of a literal `pygam.LinearGAM` dependency
 
 See [v1-status.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/v1-status.md) for the exact boundaries.
-See [parity.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/testing/parity.md) for the parity harness contract and report format.
+See [external-regression.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/testing/external-regression.md) for the heavy regression workflow.
 
 ## Stable Entry Points
 
@@ -292,7 +284,6 @@ pnpm typecheck
 pnpm build
 pnpm test
 pnpm test:integration
-pnpm compare:causal-learn
 pnpm pack:causal
 ```
 

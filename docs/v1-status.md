@@ -2,26 +2,18 @@
 
 Last updated: 2026-03-16
 
-This document records the current `causal-js` baseline against `causal-learn`.
+This document records the current `causal-js` baseline.
 The current V1 baseline has completed the acceptance run:
 
 - `pnpm typecheck`
 - `pnpm build`
 - `pnpm test`
 - `pnpm test:integration`
-- `pnpm parity:quick`
-- `pnpm parity:full`
-
-`pnpm compare:causal-learn` remains as a compatibility alias to the `full` parity profile.
-
-Current parity baseline:
-
-- `quick`: `17/17` pass
-- `full`: `46/46` pass
+- external regression suite in `Kanaries/causal-parity`
 
 This document is intentionally strict about the difference between:
 
-- behavior parity on selected `causal-learn` fixtures
+- behavior locked by the external regression suite
 - runnable portable baselines that are still approximation-heavy
 
 ## Current Summary
@@ -42,7 +34,7 @@ The correct next step is no longer to prove the baseline exists. The correct
 next step is to preserve the accepted boundary and avoid widening scope
 accidentally.
 
-The parity contract now lives in [testing/parity.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/testing/parity.md).
+The heavy regression workflow now lives in [testing/external-regression.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/testing/external-regression.md).
 
 ## Status Matrix
 
