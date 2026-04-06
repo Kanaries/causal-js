@@ -12,7 +12,8 @@
     "pack:causal": "cd packages/causal && npm pack --dry-run",
     "test": "vitest run",
     "test:integration": "pnpm build && vitest run --config vitest.integration.config.ts",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "typecheck:examples": "tsc -p tsconfig.examples.json --noEmit"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

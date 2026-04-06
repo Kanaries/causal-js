@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { DenseMatrix } from "./index";
+import {
+  DenseMatrix,
+  getIdentificationBackendDescriptor,
+  identifyEffect,
+  listIdentificationBackendDescriptors,
+  listIdentificationBackends,
+  runIdentificationBackend
+} from "./index";
 import { detectNodeRuntimeCapabilities, getDefaultPcNodeWorkerEntry } from "./node/index";
 import { detectWebRuntimeCapabilities, getDefaultPcWebWorkerEntry } from "./web/index";
 
@@ -13,6 +20,12 @@ describe("@kanaries/causal facade", () => {
 
     expect(matrix.rows).toBe(2);
     expect(matrix.columns).toBe(2);
+    expect(typeof identifyEffect).toBe("function");
+    expect(listIdentificationBackends()).toEqual(["dag-first-mvp", "dag-backdoor-only"]);
+    expect(listIdentificationBackendDescriptors()).toHaveLength(2);
+    expect(getIdentificationBackendDescriptor("dag-first-mvp").label).toBe("DAG-First MVP");
+    expect(getIdentificationBackendDescriptor("dag-backdoor-only").label).toBe("DAG Backdoor Only");
+    expect(typeof runIdentificationBackend).toBe("function");
   });
 
   it("re-exports the node facade", () => {

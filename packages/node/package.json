@@ -26,7 +26,8 @@
   "sideEffects": false,
   "dependencies": {
     "@causal-js/core": "workspace:*",
-    "@causal-js/discovery": "workspace:*"
+    "@causal-js/discovery": "workspace:*",
+    "@causal-js/tasks": "workspace:*"
   },
   "scripts": {
     "build": "tsup --config tsup.config.ts",

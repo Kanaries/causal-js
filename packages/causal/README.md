@@ -45,6 +45,25 @@ const result = pc({
 });
 ```
 
+Task workflow example:
+
+```ts
+import { CausalGraph, GRAPH_KIND, identifyEffect } from "@kanaries/causal";
+
+const graph = CausalGraph.fromNodeIds(["X", "Y", "Z"], { kind: GRAPH_KIND.dag });
+graph.addDirectedEdge("Z", "X");
+graph.addDirectedEdge("Z", "Y");
+graph.addDirectedEdge("X", "Y");
+
+const result = identifyEffect({
+  graph: graph.toShape(),
+  treatment: "X",
+  outcome: "Y"
+});
+
+console.log(result.estimandSpec?.expression);
+```
+
 Node runtime facade:
 
 ```ts
@@ -61,5 +80,5 @@ import { detectWebRuntimeCapabilities } from "@kanaries/causal/web";
 console.log(detectWebRuntimeCapabilities());
 ```
 
-See the workspace root README and `docs/v1-status.md` for the current V1 scope,
-accepted parity boundaries, and release validation commands.
+See the workspace root README, `docs/tasks/end-to-end-workflow.md`, and `docs/v1-status.md` for the current V1 scope,
+accepted parity boundaries, task-workflow example path, and release validation commands.

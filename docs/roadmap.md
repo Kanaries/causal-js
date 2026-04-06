@@ -67,11 +67,13 @@ scope. The roadmap priority is therefore no longer "finish V1 existence".
 It is now:
 
 1. preserve the accepted V1 boundary
-2. document the accepted surface clearly
-3. only widen parity or runtime coverage when it materially changes confidence
-4. avoid reopening dependency-level reimplementation work unless it becomes a product requirement
+2. stabilize the Step 3 DAG-first task-oriented workflow layer
+3. document the accepted surface clearly
+4. only widen parity or runtime coverage when it materially changes confidence
+5. avoid reopening dependency-level reimplementation work unless it becomes a product requirement
 
 See [v1-status.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/v1-status.md) for the current algorithm-by-algorithm status matrix.
+See [tasks/index.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/index.md) for the current Step 3 workflow boundary.
 
 ## Suggested Near-Term Work Items
 

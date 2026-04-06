@@ -53,6 +53,7 @@ published separately.
 
 - `@causal-js/core`: shared graph types, runtime capability metadata, and common algorithm contracts
 - `@causal-js/discovery`: runtime-agnostic causal discovery APIs and algorithm registry
+- `@causal-js/tasks`: DAG-first task-oriented workflow APIs for adjustment, identification, falsification, and stability
 - `@causal-js/node`: Node.js facade and Node-only capability surface
 - `@causal-js/web`: browser facade and browser/WebGPU capability surface
 
@@ -111,7 +112,7 @@ See [external-regression.md](/Users/observedobserver/Documents/GitHub/causal-lab
 
 Current public package roles:
 
-- `@kanaries/causal`: portable graph primitives, matrix containers, CI tests, score functions, and discovery algorithms
+- `@kanaries/causal`: portable graph primitives, matrix containers, CI tests, score functions, discovery algorithms, and DAG-first task workflows
 - `@kanaries/causal/node`: Node-oriented runtime facade
 - `@kanaries/causal/web`: browser-oriented runtime facade
 
@@ -201,6 +202,95 @@ const result = gin({
 
 console.log(result.causalOrder);
 ```
+
+### Task Workflow
+
+```ts
+import {
+  CausalGraph,
+  DenseMatrix,
+  FisherZTest,
+  GRAPH_KIND,
+  discoverGraph,
+  findAdjustmentSets,
+  identifyEffect,
+  falsifyGraph,
+  stabilityAnalysis
+} from "@kanaries/causal";
+
+const graph = CausalGraph.fromNodeIds(["X", "Y", "Z"], { kind: GRAPH_KIND.dag });
+graph.addDirectedEdge("Z", "X");
+graph.addDirectedEdge("Z", "Y");
+graph.addDirectedEdge("X", "Y");
+
+const data = new DenseMatrix(
+  Array.from({ length: 200 }, (_, index) => {
+    const t = index + 1;
+    const z = Math.sin(t / 8) + Math.cos(t / 13);
+    const x = 0.9 * z + Math.sin(t / 5) * 0.03;
+    const y = -0.8 * z + Math.cos(t / 7) * 0.03;
+    return [x, y, z];
+  })
+);
+
+const discovered = discoverGraph({
+  algorithm: "pc",
+  options: {
+    data,
+    ciTest: new FisherZTest(data),
+    nodeLabels: ["X", "Y", "Z"]
+  }
+});
+
+const adjustment = findAdjustmentSets({
+  graph: graph.toShape(),
+  treatment: "X",
+  outcome: "Y"
+});
+const identified = identifyEffect({
+  graph: graph.toShape(),
+  treatment: "X",
+  outcome: "Y"
+});
+const falsified = falsifyGraph({
+  graph: graph.toShape(),
+  data,
+  observedNodeOrder: ["X", "Y", "Z"]
+});
+const stability = stabilityAnalysis({
+  discovery: {
+    algorithm: "pc",
+    options: {
+      data,
+      ciTest: new FisherZTest(data),
+      nodeLabels: ["X", "Y", "Z"]
+    }
+  },
+  bootstrapSamples: 10,
+  seed: 42
+});
+
+console.log(discovered.summary);
+console.log(adjustment.candidateSets);
+console.log(identified.method);
+console.log(identified.estimandSpec?.expression);
+console.log(falsified.overallSummary);
+console.log(stability.edgeFrequency);
+```
+
+Current Step 3 task-workflow boundary:
+
+- graph-analysis tasks are DAG-first
+- `identifyEffect()` supports backdoor, core frontdoor, zero-effect, and current-MVP non-identifiable results
+- `identifyEffect()` now accepts `backend?: "auto" | "dag-first-mvp" | "dag-backdoor-only"`; `auto` resolves to `dag-first-mvp`, while `dag-backdoor-only` intentionally restricts identification to zero-effect and backdoor logic
+- `listIdentificationBackends()`, `listIdentificationBackendDescriptors()`, and `getIdentificationBackendDescriptor()` expose the currently available identification backends and the `auto` selection contract
+- `falsifyGraph()` supports sanity checks plus implied conditional independence validation, not full permutation falsification
+- `stabilityAnalysis()` is a bootstrap robustness wrapper, not a graph correctness proof
+- invalid falsification and stability input contracts now fail explicitly instead of producing silent fallback behavior
+
+See [tasks/index.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/index.md) and [tasks/step3-checklist.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/step3-checklist.md) for the current accepted task-workflow surface.
+See [tasks/result-contract.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/result-contract.md) for the stable result-object contract.
+See [tasks/end-to-end-workflow.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/end-to-end-workflow.md) and [examples/step3-task-workflow.ts](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/examples/step3-task-workflow.ts) for the current minimal public workflow example.
 
 ### Runtime Facades
 

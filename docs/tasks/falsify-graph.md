@@ -1,0 +1,53 @@
+# Falsify Graph
+
+`falsifyGraph()` is a DAG-first graph checking entry point. It combines structural sanity checks with implied conditional independence tests when data is available.
+
+## Example
+
+```ts
+import { CausalGraph, DenseMatrix, GRAPH_KIND, falsifyGraph } from "@kanaries/causal";
+
+const graph = CausalGraph.fromNodeIds(["X", "Z", "Y"], { kind: GRAPH_KIND.dag });
+graph.addDirectedEdge("X", "Z");
+graph.addDirectedEdge("Z", "Y");
+
+const data = new DenseMatrix([
+  [0.1, 0.2, -0.1],
+  [0.4, 0.5, -0.3],
+  [0.7, 0.8, -0.6],
+  [0.9, 1.0, -0.7],
+  [1.1, 1.2, -0.9],
+  [1.4, 1.5, -1.1]
+]);
+
+const result = falsifyGraph({
+  graph: graph.toShape(),
+  data
+});
+
+console.log(result.failedImplications);
+```
+
+## Assumptions
+
+- input graph is a DAG
+- observed data columns align with measured graph nodes
+- if `observedNodeOrder` is provided, it must contain each observed measured node exactly once
+- `alpha` must lie in `(0, 1)`
+- CI tests are interpreted as falsification evidence, not confirmation
+
+## Current Limits
+
+- no permutation-based falsification benchmark yet
+- no multiple-testing correction yet
+- no PAG, MAG, or ADMG graph falsification support
+
+## When Not To Use This API
+
+- when you need full permutation-based falsification
+- when your graph is not a DAG but you still need statistical graph validation
+- when passing these tests would be interpreted as proof that the graph is true
+
+## Notes
+
+This step tests local Markov implications implied by the DAG. A graph that is not falsified here is still only a surviving hypothesis; `not falsified` is not equivalent to `true`. Invalid input contracts such as duplicate `observedNodeOrder` entries or latent nodes passed as observed columns now fail explicitly instead of returning a misleading summary.

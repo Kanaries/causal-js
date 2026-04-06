@@ -6,7 +6,8 @@
     "moduleResolution": "Bundler",
     "paths": {
       "@causal-js/core": ["packages/core/src/index.ts"],
-      "@causal-js/discovery": ["packages/discovery/src/index.ts"]
+      "@causal-js/discovery": ["packages/discovery/src/index.ts"],
+      "@causal-js/tasks": ["packages/tasks/src/index.ts"]
     },
     "declaration": true,
     "declarationMap": true,

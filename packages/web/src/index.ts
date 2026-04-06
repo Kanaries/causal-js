@@ -24,6 +24,7 @@ import type { BrowserWorkerConstructor } from "./worker-bridge";
 
 export * from "@causal-js/core";
 export * from "@causal-js/discovery";
+export * from "@causal-js/tasks";
 export * from "./adapters/pc-worker";
 export * from "./worker-bridge";
 export * from "./workers/pc-worker-entry";
