@@ -24,9 +24,17 @@ importers:
         specifier: ^3.0.8
         version: 3.0.8(@types/node@24.0.0)
 
+  packages/causal: {}
+
   packages/core: {}
 
   packages/discovery:
+    dependencies:
+      '@causal-js/core':
+        specifier: workspace:*
+        version: link:../core
+
+  packages/kernel:
     dependencies:
       '@causal-js/core':
         specifier: workspace:*
@@ -40,6 +48,21 @@ importers:
       '@causal-js/discovery':
         specifier: workspace:*
         version: link:../discovery
+      '@causal-js/tasks':
+        specifier: workspace:*
+        version: link:../tasks
+
+  packages/tasks:
+    dependencies:
+      '@causal-js/core':
+        specifier: workspace:*
+        version: link:../core
+      '@causal-js/discovery':
+        specifier: workspace:*
+        version: link:../discovery
+      '@causal-js/kernel':
+        specifier: workspace:*
+        version: link:../kernel
 
   packages/web:
     dependencies:
@@ -49,6 +72,9 @@ importers:
       '@causal-js/discovery':
         specifier: workspace:*
         version: link:../discovery
+      '@causal-js/tasks':
+        specifier: workspace:*
+        version: link:../tasks
 
 packages:
 

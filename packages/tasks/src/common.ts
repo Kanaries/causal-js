@@ -3,7 +3,6 @@ import {
   ChiSquareTest,
   classifyEdge,
   DenseMatrix,
-  DSeparationTest,
   EDGE_ENDPOINT,
   FisherZTest,
   GRAPH_EDGE_PATTERN,
@@ -16,6 +15,7 @@ import {
   type GraphShape,
   type NumericMatrix
 } from "@causal-js/core";
+import { dagDSeparates } from "@causal-js/kernel";
 import {
   camuv,
   cdnod,
@@ -224,21 +224,7 @@ export function dSeparates(
   y: string,
   conditioningSet: readonly string[]
 ): boolean {
-  const observedOrder = graph.getNodeIds();
-  const test = new DSeparationTest(graph, observedOrder);
-  const xIndex = observedOrder.indexOf(x);
-  const yIndex = observedOrder.indexOf(y);
-  if (xIndex < 0 || yIndex < 0) {
-    throw new Error("D-separation query references an unknown node.");
-  }
-  const conditioningIndices = conditioningSet.map((nodeId) => {
-    const index = observedOrder.indexOf(nodeId);
-    if (index < 0) {
-      throw new Error(`Unknown conditioning node: ${nodeId}`);
-    }
-    return index;
-  });
-  return test.test(xIndex, yIndex, conditioningIndices) > 0.5;
+  return dagDSeparates(graph, x, y, conditioningSet);
 }
 
 export function powerset(values: readonly string[], maxSetSize = values.length): string[][] {

@@ -1,5 +1,5 @@
 {
-  "name": "@causal-js/tasks",
+  "name": "@causal-js/kernel",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -15,12 +15,11 @@
   },
   "sideEffects": false,
   "dependencies": {
-    "@causal-js/core": "workspace:*",
-    "@causal-js/discovery": "workspace:*",
-    "@causal-js/kernel": "workspace:*"
+    "@causal-js/core": "workspace:*"
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm,cjs --dts",
+    "build": "node ./scripts/build.mjs",
+    "build:wasm": "node ./scripts/build-wasm.mjs",
     "clean": "rimraf dist",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   }
