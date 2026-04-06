@@ -5,6 +5,8 @@
 
 Public npm facade for `causal-js`.
 
+The current task workflow exposed through this package is production-scope within an explicitly bounded, DAG-first contract.
+
 Primary entry points:
 
 - `@kanaries/causal`
@@ -62,6 +64,7 @@ const result = identifyEffect({
 });
 
 console.log(result.estimandSpec?.expression);
+console.log(result.backend);
 ```
 
 Node runtime facade:
@@ -81,4 +84,4 @@ console.log(detectWebRuntimeCapabilities());
 ```
 
 See the workspace root README, `docs/tasks/end-to-end-workflow.md`, and `docs/v1-status.md` for the current V1 scope,
-accepted parity boundaries, task-workflow example path, and release validation commands.
+accepted parity boundaries, task-workflow example path, and release validation commands. For Step 3 workflow usage, also see `docs/tasks/backend-selection.md` and `docs/tasks/operational-readiness.md`.

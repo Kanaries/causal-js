@@ -1,4 +1,5 @@
 import { GRAPH_KIND } from "@causal-js/core";
+import type { GraphKind } from "@causal-js/core";
 
 import { runDagBackdoorOnlyIdentificationBackend, runDagFirstIdentificationBackend } from "./identify-backend";
 import type {
@@ -64,6 +65,17 @@ export function listIdentificationBackends(): IdentificationBackendId[] {
   return [...IDENTIFICATION_BACKENDS];
 }
 
+export function supportsIdentificationBackendGraphKind(
+  backend: IdentificationBackendId,
+  graphKind: GraphKind
+): boolean {
+  return IDENTIFICATION_BACKEND_REGISTRY[backend].descriptor.graphKinds.includes(graphKind);
+}
+
+export function listIdentificationBackendsForGraphKind(graphKind: GraphKind): IdentificationBackendId[] {
+  return IDENTIFICATION_BACKENDS.filter((backend) => supportsIdentificationBackendGraphKind(backend, graphKind));
+}
+
 export function getIdentificationBackendDescriptor(
   backend: IdentificationBackendId
 ): IdentificationBackendDescriptor {
@@ -87,12 +99,19 @@ export function resolveIdentificationBackend(
     const graphKind = context?.graph.kind ?? GRAPH_KIND.dag;
     const defaultBackend = IDENTIFICATION_BACKENDS.find((backend) => {
       const descriptor = IDENTIFICATION_BACKEND_REGISTRY[backend].descriptor;
-      return descriptor.defaultForAuto && descriptor.graphKinds.includes(graphKind);
+      return descriptor.defaultForAuto && supportsIdentificationBackendGraphKind(backend, graphKind);
     });
     if (defaultBackend !== undefined) {
       return defaultBackend;
     }
     throw new Error(`No identification backend is registered for graph kind "${graphKind}".`);
+  }
+
+  const explicitGraphKind = context?.graph.kind ?? GRAPH_KIND.dag;
+  if (context !== undefined && !supportsIdentificationBackendGraphKind(preference, explicitGraphKind)) {
+    throw new Error(
+      `Identification backend "${preference}" does not support graph kind "${explicitGraphKind}".`
+    );
   }
   return preference;
 }

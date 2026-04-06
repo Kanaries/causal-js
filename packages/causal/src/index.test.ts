@@ -6,6 +6,7 @@ import {
   identifyEffect,
   listIdentificationBackendDescriptors,
   listIdentificationBackends,
+  listIdentificationBackendsForGraphKind,
   runIdentificationBackend
 } from "./index";
 import { detectNodeRuntimeCapabilities, getDefaultPcNodeWorkerEntry } from "./node/index";
@@ -23,6 +24,7 @@ describe("@kanaries/causal facade", () => {
     expect(typeof identifyEffect).toBe("function");
     expect(listIdentificationBackends()).toEqual(["dag-first-mvp", "dag-backdoor-only"]);
     expect(listIdentificationBackendDescriptors()).toHaveLength(2);
+    expect(listIdentificationBackendsForGraphKind("dag")).toEqual(["dag-first-mvp", "dag-backdoor-only"]);
     expect(getIdentificationBackendDescriptor("dag-first-mvp").label).toBe("DAG-First MVP");
     expect(getIdentificationBackendDescriptor("dag-backdoor-only").label).toBe("DAG Backdoor Only");
     expect(typeof runIdentificationBackend).toBe("function");

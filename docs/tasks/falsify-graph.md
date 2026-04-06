@@ -50,4 +50,4 @@ console.log(result.failedImplications);
 
 ## Notes
 
-This step tests local Markov implications implied by the DAG. A graph that is not falsified here is still only a surviving hypothesis; `not falsified` is not equivalent to `true`. Invalid input contracts such as duplicate `observedNodeOrder` entries or latent nodes passed as observed columns now fail explicitly instead of returning a misleading summary.
+This step tests local Markov implications implied by the DAG, but only keeps implications that are testable against the observed measured data columns. Implications that would require latent or otherwise unobserved conditioning nodes are filtered out before statistical testing instead of being surfaced as misleading inconclusive results. A graph that is not falsified here is still only a surviving hypothesis; `not falsified` is not equivalent to `true`. Invalid input contracts such as duplicate `observedNodeOrder` entries or latent nodes passed as observed columns now fail explicitly instead of returning a misleading summary.

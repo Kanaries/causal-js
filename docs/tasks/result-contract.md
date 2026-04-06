@@ -66,7 +66,8 @@ Current invariants:
 `estimand` is a compatibility-oriented rendered description. `estimandSpec` is the structured contract for supported identifiable cases.
 `estimandSpec.expressionTree` is the current symbolic expression node for supported DAG-first identification outcomes. `estimandSpec.expression` is the rendered equation string derived from that tree.
 The current backend family is now factored behind dedicated backend runners plus a registry-backed selector so future ID backends can extend the workflow without changing the top-level `identifyEffect()` contract.
-The registry is introspectable via `listIdentificationBackends()`, `listIdentificationBackendDescriptors()`, and `getIdentificationBackendDescriptor()`. In this step, the descriptor contract is stable enough to expose backend label, status, supported graph kinds, supported methods, query shape, auto-selection default, summary, and limitations.
+The registry is introspectable via `listIdentificationBackends()`, `listIdentificationBackendsForGraphKind()`, `supportsIdentificationBackendGraphKind()`, `listIdentificationBackendDescriptors()`, and `getIdentificationBackendDescriptor()`. In this step, the descriptor contract is stable enough to expose backend label, status, supported graph kinds, supported methods, query shape, auto-selection default, summary, and limitations. Explicit backend selection must reject incompatible graph kinds instead of silently falling back.
+See `docs/tasks/backend-selection.md` for the operational guidance on when to pin a backend instead of relying on `auto`.
 
 ## Falsification
 
@@ -87,6 +88,7 @@ Current invariants:
 - `overallSummary.inconclusiveCount` equals `inconclusiveImplications.length`
 - `overallSummary.falsified` is `true` only when at least one tested implication failed
 - `overallSummary.falsified` is `null` when this MVP does not run a statistical falsification decision
+- `impliedConditionalIndependences` only includes implications that are testable against the observed measured node set for the current run
 
 ## Stability
 
@@ -107,4 +109,4 @@ Current invariants:
 
 ## Current Scope
 
-This contract is intentionally tied to the current Step 3 DAG-first MVP. More general graph families, richer symbolic estimands, and stronger falsification procedures should extend this contract explicitly rather than overloading existing fields silently.
+This contract is intentionally tied to the current Step 3 production-scope DAG-first boundary. More general graph families, richer symbolic estimands, and stronger falsification procedures should extend this contract explicitly rather than overloading existing fields silently.

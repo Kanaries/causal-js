@@ -14,12 +14,14 @@ import {
   findAdjustmentSets,
   getIdentificationBackendDescriptor,
   listIdentificationBackendDescriptors,
+  listIdentificationBackendsForGraphKind,
   identifyEffect,
   isAdjustmentSet,
   listIdentificationBackends,
   resolveIdentificationBackend,
   runDagFirstIdentificationBackend,
   runIdentificationBackend,
+  supportsIdentificationBackendGraphKind,
   stabilityAnalysis
 } from "./index";
 import type { ConditionalIndependenceTest, NumericMatrix } from "@causal-js/core";
@@ -121,6 +123,14 @@ class StrictCiTest implements ConditionalIndependenceTest {
 
   test(x: number, y: number, conditioningSet?: readonly number[]): number {
     return this.data.rows > 0 && x !== y && (conditioningSet?.length ?? 0) >= 0 ? 0.5 : 0;
+  }
+}
+
+class ThrowingCiTest implements ConditionalIndependenceTest {
+  readonly name = "throwing-ci";
+
+  test(): number {
+    throw new Error("Synthetic CI failure");
   }
 }
 
@@ -354,6 +364,39 @@ describe("task-oriented workflow", () => {
     expectAdjustmentContract(latentFiltered);
   });
 
+  it("keeps adjustment descendant invalidity and count invariants stable", () => {
+    const descendantGraph = CausalGraph.fromNodeIds(["X", "M", "D", "Y"], { kind: GRAPH_KIND.dag });
+    descendantGraph.addDirectedEdge("X", "M");
+    descendantGraph.addDirectedEdge("M", "D");
+    descendantGraph.addDirectedEdge("M", "Y");
+
+    const descendantInvalid = isAdjustmentSet({
+      graph: descendantGraph.toShape(),
+      treatment: "X",
+      outcome: "Y",
+      adjustmentSet: ["D"]
+    });
+    expect(descendantInvalid.valid).toBe(false);
+    expect(descendantInvalid.candidate.forbiddenDescendants).toContain("D");
+
+    const full = findAdjustmentSets({
+      graph: buildMultipleMinimalSetDag().toShape(),
+      treatment: "X",
+      outcome: "Y"
+    });
+    const limited = findAdjustmentSets({
+      graph: buildMultipleMinimalSetDag().toShape(),
+      treatment: "X",
+      outcome: "Y",
+      maxResults: 1
+    });
+
+    expect(limited.candidateSets).toHaveLength(1);
+    expect(limited.validAdjustmentSetCount).toBe(full.validAdjustmentSetCount);
+    expect(limited.minimalAdjustmentSetCount).toBe(full.minimalAdjustmentSetCount);
+    expectAdjustmentCheckContract(descendantInvalid);
+  });
+
   it("identifies backdoor, frontdoor, and current non-identifiable cases", () => {
     const backdoor = identifyEffect({
       graph: buildConfoundedDag().toShape(),
@@ -576,6 +619,10 @@ describe("task-oriented workflow", () => {
       id: "dag-backdoor-only",
       defaultForAuto: false
     });
+    expect(listIdentificationBackendsForGraphKind("dag")).toEqual(["dag-first-mvp", "dag-backdoor-only"]);
+    expect(listIdentificationBackendsForGraphKind("cpdag")).toEqual([]);
+    expect(supportsIdentificationBackendGraphKind("dag-first-mvp", "dag")).toBe(true);
+    expect(supportsIdentificationBackendGraphKind("dag-first-mvp", "cpdag")).toBe(false);
     expect(resolveIdentificationBackend()).toBe("dag-first-mvp");
     expect(resolveIdentificationBackend("auto", { graph: buildConfoundedDag().toShape() })).toBe("dag-first-mvp");
     expect(resolveIdentificationBackend("dag-first-mvp")).toBe("dag-first-mvp");
@@ -612,6 +659,36 @@ describe("task-oriented workflow", () => {
     expectIdentificationContract(explicitBackend);
   });
 
+  it("keeps backend descriptors defensive and rejects incompatible graph kinds explicitly", () => {
+    const descriptor = getIdentificationBackendDescriptor("dag-first-mvp");
+    descriptor.graphKinds.push("cpdag");
+    descriptor.supportedMethods.push("frontdoor");
+    descriptor.limitations.push("mutated");
+
+    expect(getIdentificationBackendDescriptor("dag-first-mvp")).toMatchObject({
+      graphKinds: ["dag"],
+      supportedMethods: ["zero-effect", "backdoor", "frontdoor"]
+    });
+    expect(getIdentificationBackendDescriptor("dag-first-mvp").limitations).not.toContain("mutated");
+
+    const cpdag = CausalGraph.fromNodeIds(["X", "Y"], { kind: GRAPH_KIND.cpdag });
+    cpdag.addUndirectedEdge("X", "Y");
+
+    expect(() => resolveIdentificationBackend("dag-first-mvp", { graph: cpdag.toShape() })).toThrow(
+      /does not support graph kind/i
+    );
+    expect(() =>
+      runIdentificationBackend(
+        {
+          graph: cpdag.toShape(),
+          treatment: "X",
+          outcome: "Y"
+        },
+        "dag-first-mvp"
+      )
+    ).toThrow(/does not support graph kind/i);
+  });
+
   it("supports a conservative dag-backdoor-only backend", () => {
     const backdoor = identifyEffect({
       graph: buildConfoundedDag().toShape(),
@@ -643,6 +720,43 @@ describe("task-oriented workflow", () => {
     );
     expectIdentificationContract(backdoor);
     expectIdentificationContract(frontdoorBlocked);
+  });
+
+  it("keeps identified methods aligned with backend descriptors", () => {
+    const mvpDescriptor = getIdentificationBackendDescriptor("dag-first-mvp");
+    const backdoor = identifyEffect({
+      graph: buildConfoundedDag().toShape(),
+      treatment: "X",
+      outcome: "Y",
+      backend: "dag-first-mvp"
+    });
+    expect(backdoor.identifiable).toBe(true);
+    if (backdoor.method !== "non-identifiable") {
+      expect(mvpDescriptor.supportedMethods).toContain(backdoor.method);
+    }
+
+    const frontdoor = identifyEffect({
+      graph: buildFrontdoorDag(true).toShape(),
+      treatment: "X",
+      outcome: "Y",
+      backend: "dag-first-mvp"
+    });
+    expect(frontdoor.identifiable).toBe(true);
+    if (frontdoor.method !== "non-identifiable") {
+      expect(mvpDescriptor.supportedMethods).toContain(frontdoor.method);
+    }
+
+    const conservativeDescriptor = getIdentificationBackendDescriptor("dag-backdoor-only");
+    const conservative = identifyEffect({
+      graph: buildConfoundedDag().toShape(),
+      treatment: "X",
+      outcome: "Y",
+      backend: "dag-backdoor-only"
+    });
+    expect(conservative.identifiable).toBe(true);
+    if (conservative.method !== "non-identifiable") {
+      expect(conservativeDescriptor.supportedMethods).toContain(conservative.method);
+    }
   });
 
   it("covers zero-effect and keeps identification result schema stable", () => {
@@ -815,6 +929,50 @@ describe("task-oriented workflow", () => {
     expectFalsificationContract(result);
   });
 
+  it("filters latent-conditioned implications and preserves CI errors structurally", () => {
+    const graph = new CausalGraph(
+      [
+        { id: "X" },
+        { id: "Y" },
+        { id: "Z" },
+        { id: "L", nodeType: NODE_TYPE.latent }
+      ],
+      { kind: GRAPH_KIND.dag }
+    );
+    graph.addDirectedEdge("X", "Y");
+    graph.addDirectedEdge("L", "Y");
+
+    const filtered = falsifyGraph({
+      graph: graph.toShape(),
+      data: new DenseMatrix(Array.from({ length: 120 }, (_, index) => [Math.sin(index), Math.cos(index), index % 2])),
+      observedNodeOrder: ["X", "Y", "Z"]
+    });
+    expect(
+      filtered.impliedConditionalIndependences.every(
+        (implication) => !implication.conditioningSet.includes("L")
+      )
+    ).toBe(true);
+    expect(
+      filtered.testedImplications.every((implication) => !implication.conditioningSet.includes("L"))
+    ).toBe(true);
+
+    const failingGraph = CausalGraph.fromNodeIds(["X", "Z", "Y"], { kind: GRAPH_KIND.dag });
+    failingGraph.addDirectedEdge("X", "Z");
+    failingGraph.addDirectedEdge("Z", "Y");
+    const failing = falsifyGraph({
+      graph: failingGraph.toShape(),
+      data: buildChainData(120),
+      ciTest: new ThrowingCiTest(),
+      observedNodeOrder: ["X", "Y", "Z"]
+    });
+    expect(failing.inconclusiveImplications.length).toBeGreaterThan(0);
+    expect(
+      failing.inconclusiveImplications.every((implication) => implication.reason?.includes("Synthetic CI failure"))
+    ).toBe(true);
+    expectFalsificationContract(filtered);
+    expectFalsificationContract(failing);
+  });
+
   it("reports deterministic bootstrap stability summaries for discovery wrappers", () => {
     const data = buildCommonCauseData(240);
     const result = stabilityAnalysis({
@@ -917,6 +1075,48 @@ describe("task-oriented workflow", () => {
     });
     expect(recovered.runSummaries).toHaveLength(2);
     expectStabilityContract(recovered);
+  });
+
+  it("keeps full-sample no-replacement bootstrap runs deterministic", () => {
+    const data = buildCommonCauseData(120);
+    const first = stabilityAnalysis({
+      discovery: {
+        algorithm: "pc",
+        options: {
+          data,
+          ciTest: new FisherZTest(data),
+          nodeLabels: ["X", "Y", "Z"],
+          alpha: 0.05
+        }
+      },
+      bootstrapSamples: 4,
+      sampleFraction: 1,
+      replace: false,
+      seed: 7
+    });
+
+    expect(first.runSummaries.every((entry) => entry.sampleSize === data.rows)).toBe(true);
+
+    const second = stabilityAnalysis({
+      discovery: {
+        algorithm: "pc",
+        options: {
+          data,
+          ciTest: new FisherZTest(data),
+          nodeLabels: ["X", "Y", "Z"],
+          alpha: 0.05
+        }
+      },
+      bootstrapSamples: 4,
+      sampleFraction: 1,
+      replace: false,
+      seed: 7
+    });
+
+    expect(second.runSummaries).toEqual(first.runSummaries);
+    expect(second.edgeFrequency).toEqual(first.edgeFrequency);
+    expect(second.orientationStability).toEqual(first.orientationStability);
+    expectStabilityContract(first);
   });
 
   it("rejects invalid stability bootstrap contracts explicitly", () => {

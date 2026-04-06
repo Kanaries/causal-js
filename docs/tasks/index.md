@@ -1,6 +1,6 @@
 # Task-Oriented Causal Workflow
 
-Step 3 adds a task-oriented workflow layer on top of the existing discovery substrate. The current workflow is intentionally DAG-first and identification-first.
+Step 3 adds a task-oriented workflow layer on top of the existing discovery substrate. The current workflow is intentionally DAG-first, identification-first, and production-scope only within its explicitly documented boundary.
 
 ## Recommended Order
 
@@ -10,6 +10,8 @@ Step 3 adds a task-oriented workflow layer on top of the existing discovery subs
 4. `stabilityAnalysis(...)`
 
 See [end-to-end-workflow.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/end-to-end-workflow.md) for the current minimal public workflow example.
+See [backend-selection.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/backend-selection.md) for production backend selection guidance.
+See [operational-readiness.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/operational-readiness.md) for release checks and evidence boundaries.
 
 ## Minimal End-To-End Example
 
@@ -80,6 +82,7 @@ console.log(stability.edgeFrequency);
 - graph-analysis tasks support directed DAGs only
 - discovery is wrapped, not reimplemented
 - identification stops at backdoor, core frontdoor, zero-effect, and current-MVP non-identifiable
+- identification backend selection is explicit and introspectable; incompatible graph kinds must fail explicitly instead of silently falling back
 - falsification stops at implied CI checks and graph sanity checks
 - stability is a bootstrap wrapper, not a self-compatibility framework
 - falsification and stability now reject invalid input contracts such as duplicate observed-node mappings or out-of-range bootstrap thresholds
@@ -92,3 +95,9 @@ See [result-contract.md](/Users/observedobserver/Documents/GitHub/causal-lab/cau
 - when your graph is PAG, MAG, or ADMG and you need theorem-level graph-analysis guarantees
 - when you need permutation-based falsification or multiple-testing corrected graph validation
 - when you need an estimator layer rather than identification-only output
+
+## What This Layer Does Not Prove
+
+- a surviving falsification result is not causal truth
+- an identified estimand is not the same as a validated estimator
+- a stable bootstrap edge is still only a robustness signal

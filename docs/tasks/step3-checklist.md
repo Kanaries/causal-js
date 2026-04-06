@@ -1,6 +1,6 @@
 # Step 3 Checklist
 
-This checklist freezes the current Step 3 MVP boundary. Treat checked items as implemented and documented. Treat unchecked items as intentionally out of scope unless a later step reopens them.
+This checklist freezes the current Step 3 production-scope DAG-first boundary. Treat checked items as implemented and documented. Treat unchecked items as intentionally out of scope unless a later step reopens them.
 
 ## Task API Surface
 
@@ -58,3 +58,5 @@ This checklist freezes the current Step 3 MVP boundary. Treat checked items as i
 - `not falsified` does not mean the graph is true
 - `identifiable` does not mean every estimator is appropriate
 - `stabilityAnalysis()` is a robustness wrapper, not a discovery correctness proof
+- use `docs/tasks/backend-selection.md` when choosing an identification backend
+- use `docs/tasks/operational-readiness.md` before treating this workflow as release-ready

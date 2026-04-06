@@ -5,6 +5,8 @@
 
 A JavaScript and TypeScript toolkit for causal discovery and causal inference.
 
+The current Step 3 workflow is production-scope within an explicitly bounded, DAG-first contract. It is not presented as a full causal inference framework.
+
 For npm consumers, the public package is `@kanaries/causal`.
 
 ## Install
@@ -283,7 +285,8 @@ Current Step 3 task-workflow boundary:
 - graph-analysis tasks are DAG-first
 - `identifyEffect()` supports backdoor, core frontdoor, zero-effect, and current-MVP non-identifiable results
 - `identifyEffect()` now accepts `backend?: "auto" | "dag-first-mvp" | "dag-backdoor-only"`; `auto` resolves to `dag-first-mvp`, while `dag-backdoor-only` intentionally restricts identification to zero-effect and backdoor logic
-- `listIdentificationBackends()`, `listIdentificationBackendDescriptors()`, and `getIdentificationBackendDescriptor()` expose the currently available identification backends and the `auto` selection contract
+- `listIdentificationBackends()`, `listIdentificationBackendsForGraphKind()`, `supportsIdentificationBackendGraphKind()`, `listIdentificationBackendDescriptors()`, and `getIdentificationBackendDescriptor()` expose the currently available identification backends, graph-kind compatibility, and the `auto` selection contract
+- explicit backend selection now rejects incompatible graph kinds instead of silently falling back
 - `falsifyGraph()` supports sanity checks plus implied conditional independence validation, not full permutation falsification
 - `stabilityAnalysis()` is a bootstrap robustness wrapper, not a graph correctness proof
 - invalid falsification and stability input contracts now fail explicitly instead of producing silent fallback behavior
@@ -291,6 +294,7 @@ Current Step 3 task-workflow boundary:
 See [tasks/index.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/index.md) and [tasks/step3-checklist.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/step3-checklist.md) for the current accepted task-workflow surface.
 See [tasks/result-contract.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/result-contract.md) for the stable result-object contract.
 See [tasks/end-to-end-workflow.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/end-to-end-workflow.md) and [examples/step3-task-workflow.ts](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/examples/step3-task-workflow.ts) for the current minimal public workflow example.
+See [tasks/backend-selection.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/backend-selection.md) and [tasks/operational-readiness.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/operational-readiness.md) for backend pinning guidance, validation commands, and evidence boundaries.
 
 ### Runtime Facades
 

@@ -36,4 +36,24 @@ describe("step3 task workflow example", () => {
     expect(result.falsified.graphValidity.dagSupported).toBe(true);
     expect(result.stability.runSummaries).toHaveLength(10);
   });
+
+  it("keeps backend guidance visible through the example surface", () => {
+    const result = runStep3TaskWorkflowExample();
+
+    expect(result.identificationBackends.filter((entry) => entry.defaultForAuto)).toEqual([
+      expect.objectContaining({
+        id: "dag-first-mvp",
+        supportedMethods: expect.arrayContaining(["backdoor", "frontdoor", "zero-effect"])
+      })
+    ]);
+    expect(result.identificationBackends).toContainEqual(
+      expect.objectContaining({
+        id: "dag-backdoor-only",
+        supportedMethods: expect.arrayContaining(["backdoor", "zero-effect"])
+      })
+    );
+    expect(
+      result.identificationBackends.find((entry) => entry.id === "dag-backdoor-only")?.supportedMethods
+    ).not.toContain("frontdoor");
+  });
 });

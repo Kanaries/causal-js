@@ -25,6 +25,9 @@ function deriveLocalMarkovImplications(
 
   for (const nodeId of observedNodeOrder) {
     const parents = graph.getParentIds(nodeId);
+    if (parents.some((parent) => !observed.has(parent))) {
+      continue;
+    }
     const descendants = new Set(graph.getDescendantIds([nodeId]));
     for (const candidate of observedNodeOrder) {
       if (
