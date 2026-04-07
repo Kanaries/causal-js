@@ -27,6 +27,29 @@ yarn add @kanaries/causal
 bun add @kanaries/causal
 ```
 
+## Quick Start
+
+If you are new to the library, start with one of these three paths:
+
+1. Discovery only: use `pc`, `ges`, `exactSearch`, `gin`, `grasp`, `cdnod`, `camuv`, or `rcd` directly.
+2. DAG-first workflow: use `discoverGraph`, `findAdjustmentSets`, `identifyEffect`, `falsifyGraph`, and `stabilityAnalysis`.
+3. Runtime-specific integration: use `@kanaries/causal/node` or `@kanaries/causal/web` when you need runtime capability helpers.
+
+The current task workflow is production-scope only within its explicit DAG-first boundary. It is appropriate when you already accept a DAG-first structural workflow and need real adjustment, identification, falsification, and stability helpers instead of mock orchestration.
+
+## Choose The Right API
+
+Use these entry points based on the job you are trying to do:
+
+- `pc`, `ges`, `exactSearch`, `gin`, `grasp`, `cdnod`, `camuv`, `rcd`: run a concrete discovery algorithm directly.
+- `discoverGraph(...)`: wrap an existing discovery algorithm behind a stable task result object.
+- `findAdjustmentSets(...)` / `isAdjustmentSet(...)`: inspect valid DAG backdoor covariate sets.
+- `identifyEffect(...)`: ask whether a singleton treatment effect is identifiable under the supported DAG-first rules.
+- `falsifyGraph(...)`: run DAG sanity checks plus implied conditional independence validation against observed data.
+- `stabilityAnalysis(...)`: bootstrap an existing discovery configuration and summarize robustness.
+
+If you need full ID, richer graph classes such as PAG/MAG/ADMG, counterfactuals, permutation falsification, or estimator construction, this repository does not currently promise that surface.
+
 ## Public Package
 
 This repository is organized as a single Git repo with a `pnpm` workspace. The
@@ -121,6 +144,20 @@ Current public package roles:
 At the current v1 stage, the Node and Web public facades intentionally overlap
 a lot. Runtime-specific divergence is currently limited to capability probes,
 execution planning, and worker-adapter scaffolding.
+
+## Task Workflow At A Glance
+
+The recommended DAG-first order is:
+
+1. `discoverGraph(...)`
+2. `findAdjustmentSets(...)`
+3. `identifyEffect(...)`
+4. `falsifyGraph(...)`
+5. `stabilityAnalysis(...)`
+
+See [tasks/index.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/index.md) for the full task surface.
+See [tasks/backend-selection.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/backend-selection.md) before choosing `auto`, `dag-first-mvp`, or `dag-backdoor-only`.
+See [tasks/operational-readiness.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/operational-readiness.md) for release checks and interpretation boundaries.
 
 ## Usage
 
@@ -370,7 +407,9 @@ See:
 - [roadmap.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/roadmap.md)
 - [v1-status.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/v1-status.md)
 
-## Development
+## Developer Workflow
+
+For local development in this repository:
 
 ```bash
 pnpm install
@@ -378,6 +417,21 @@ pnpm typecheck
 pnpm build
 pnpm test
 pnpm test:integration
+pnpm typecheck:examples
+```
+
+If you change public behavior, graph semantics, CI/score contracts, parity baselines, or regression expectations, also run the heavy external regression suite in `causal-parity`:
+
+```bash
+cd ../causal-parity
+CAUSAL_JS_SOURCE_ROOT=../causal-js pnpm test
+```
+
+Use `docs/tasks/operational-readiness.md` as the release checklist for the DAG-first workflow surface.
+
+If you want to inspect the publishable facade package locally:
+
+```bash
 pnpm pack:causal
 ```
 

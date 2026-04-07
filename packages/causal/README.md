@@ -31,6 +31,20 @@ yarn add @kanaries/causal
 bun add @kanaries/causal
 ```
 
+## Quick start
+
+Choose the smallest public surface that matches your use case:
+
+- `@kanaries/causal`: discovery algorithms, graph primitives, CI tests, and the DAG-first task workflow
+- `@kanaries/causal/node`: Node-specific runtime helpers
+- `@kanaries/causal/web`: browser-specific runtime helpers
+
+## Choose the right entry point
+
+- use the root facade when you want portable discovery or DAG-first workflow APIs
+- use the Node facade when you need runtime capability checks or worker helpers for Node.js
+- use the Web facade when you need browser capability checks or worker helpers for web runtimes
+
 Example:
 
 ```ts
