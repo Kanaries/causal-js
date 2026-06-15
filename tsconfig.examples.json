@@ -5,6 +5,7 @@
     "paths": {
       "@causal-js/core": ["packages/core/src/index.ts"],
       "@causal-js/discovery": ["packages/discovery/src/index.ts"],
+      "@causal-js/kernel": ["packages/kernel/src/index.ts"],
       "@causal-js/tasks": ["packages/tasks/src/index.ts"],
       "@kanaries/causal": ["packages/causal/src/index.ts"],
       "@kanaries/causal/node": ["packages/causal/src/node/index.ts"],
