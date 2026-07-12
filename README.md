@@ -31,7 +31,7 @@ bun add @kanaries/causal
 
 If you are new to the library, start with one of these three paths:
 
-1. Discovery only: use `pc`, `ges`, `exactSearch`, `gin`, `grasp`, `cdnod`, `camuv`, or `rcd` directly.
+1. Discovery only: use `pc`, `ges`, `exactSearch`, `gin`, `grasp`, `cdnod`, `camuv`, or `rcd` directly; use `anm` for pairwise additive-noise direction evidence.
 2. DAG-first workflow: use `discoverGraph`, `findAdjustmentSets`, `identifyEffect`, `falsifyGraph`, and `stabilityAnalysis`.
 3. Runtime-specific integration: use `@kanaries/causal/node` or `@kanaries/causal/web` when you need runtime capability helpers.
 
@@ -42,6 +42,7 @@ The current task workflow is production-scope only within its explicit DAG-first
 Use these entry points based on the job you are trying to do:
 
 - `pc`, `ges`, `exactSearch`, `gin`, `grasp`, `cdnod`, `camuv`, `rcd`: run a concrete discovery algorithm directly.
+- `anm(x, y)`: score both pairwise additive-noise directions without imposing an application-specific orientation threshold.
 - `discoverGraph(...)`: wrap an existing discovery algorithm behind a stable task result object.
 - `findAdjustmentSets(...)` / `isAdjustmentSet(...)`: inspect valid DAG backdoor covariate sets.
 - `identifyEffect(...)`: ask whether a singleton treatment effect is identifiable under the supported DAG-first rules.
@@ -160,6 +161,25 @@ See [tasks/backend-selection.md](/Users/observedobserver/Documents/GitHub/causal
 See [tasks/operational-readiness.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/operational-readiness.md) for release checks and interpretation boundaries.
 
 ## Usage
+
+### Pairwise ANM
+
+```ts
+import { anm } from "@kanaries/causal";
+
+const score = anm(x, y);
+console.log(score.forwardPValue);  // x -> y: x independent of fitted y noise
+console.log(score.backwardPValue); // y -> x: y independent of fitted x noise
+```
+
+ANM is deterministic and browser-safe. Its default regression is a
+standardized RBF kernel posterior mean with fixed-grid marginal-likelihood
+selection. This intentionally approximates, but does not exactly reproduce,
+causal-learn's continuously optimized sklearn
+`ConstantKernel * RBF + WhiteKernel` Gaussian process. Supply a custom
+`AnmRegressor` through `options.regressor` when different regression parity is
+required. The API returns statistical evidence and does not encode a direction
+ratio or significance rule.
 
 ### `PC`
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.1
+
+### Added
+
+- **Pairwise ANM scoring** (`anm`) in the portable discovery package and public
+  facade. It reports forward/backward KCI evidence and fit diagnostics, uses an
+  injectable regression contract, and defaults to deterministic browser-safe
+  RBF kernel regression. The default is explicitly an approximation of
+  causal-learn's sklearn Gaussian-process fit, not exact GP parity.
+
 ## 0.2.0
 
 ### Fixed

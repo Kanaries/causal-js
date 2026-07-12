@@ -61,6 +61,19 @@ const result = pc({
 });
 ```
 
+Pairwise additive-noise direction evidence is also portable across the root,
+Node, and Web entry points:
+
+```ts
+import { anm } from "@kanaries/causal";
+
+const { forwardPValue, backwardPValue } = anm(x, y);
+```
+
+`anm` deliberately leaves orientation thresholds to the caller. Its default
+deterministic RBF regression is browser-safe and injectable, but is an
+intentional approximation rather than exact sklearn Gaussian-process parity.
+
 Task workflow example:
 
 ```ts

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   DenseMatrix,
+  anm,
   getIdentificationBackendDescriptor,
   identifyEffect,
   listIdentificationBackendDescriptors,
@@ -22,6 +23,7 @@ describe("@kanaries/causal facade", () => {
     expect(matrix.rows).toBe(2);
     expect(matrix.columns).toBe(2);
     expect(typeof identifyEffect).toBe("function");
+    expect(typeof anm).toBe("function");
     expect(listIdentificationBackends()).toEqual(["dag-first-mvp", "dag-backdoor-only"]);
     expect(listIdentificationBackendDescriptors()).toHaveLength(2);
     expect(listIdentificationBackendsForGraphKind("dag")).toEqual(["dag-first-mvp", "dag-backdoor-only"]);

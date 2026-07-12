@@ -119,6 +119,8 @@ Implement in pure TypeScript first:
 ### Tier 2: portable API, optional acceleration
 
 - KCI
+- pairwise ANM scoring (portable deterministic RBF regression plus shared KCI;
+  regression is injectable for future parity improvements)
 - RCIT / FastKCI
 - permutation-based search
 - exact search
@@ -129,7 +131,9 @@ packages provide faster implementations when available.
 ### Tier 3: runtime-specialized
 
 - CALM
-- PNL / ANM variants with heavy ML dependencies
+- PNL and ANM variants that still require heavy ML dependencies (the public
+  pairwise `anm` primitive uses an explicitly documented portable regression
+  approximation instead)
 - Granger pipelines with heavier numerical stacks
 
 These should be added only when their runtime story is explicit.
