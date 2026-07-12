@@ -8,6 +8,7 @@ export * from "./ges";
 export * from "./graph-result";
 export * from "./gin";
 export * from "./grasp";
+export * from "./mvpc";
 export * from "./pc";
 export * from "./pc-worker";
 export * from "./rcd";

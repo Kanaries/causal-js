@@ -24,7 +24,15 @@ function createAugmentedNodeLabels(
     throw new Error(`Expected ${variableCount} node labels, got ${observedLabels.length}.`);
   }
 
-  return [...observedLabels, contextLabel ?? "C"];
+  const resolvedContextLabel = contextLabel ?? "C";
+  if (observedLabels.includes(resolvedContextLabel)) {
+    throw new Error(
+      `Context node label "${resolvedContextLabel}" collides with an observed node label. ` +
+        `Pass options.contextLabel to rename the context node.`
+    );
+  }
+
+  return [...observedLabels, resolvedContextLabel];
 }
 
 function normalizeContextColumn(context: CdnodOptions["context"], rows: number): number[] {
@@ -79,6 +87,16 @@ function orientContextNode(graph: CausalGraph, contextNodeId: string): void {
   }
 }
 
+/**
+ * CD-NOD: nonstationary causal discovery over data augmented with a context
+ * (domain/time) index column.
+ *
+ * When the context index is a smooth surrogate like time, the linearity
+ * assumption of Fisher-Z is usually too strong for the context edges —
+ * causal-learn recommends a kernel test there. Pass
+ * `createCiTest: (data) => new KciTest(data)` to use the kernel-based CI
+ * test on the augmented matrix.
+ */
 export function cdnod(options: CdnodOptions): CdnodResult {
   const augmentedData = augmentWithContext(options.data, options.context);
   const nodeLabels = createAugmentedNodeLabels(

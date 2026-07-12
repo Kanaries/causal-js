@@ -782,18 +782,21 @@ describe("task-oriented workflow", () => {
         strategy: "zero-effect",
         query: "P(Y | do(X))",
         summary: expect.stringContaining("No directed path"),
-        expression: "P(Y | do(X)) = 0",
+        // The interventional distribution equals the observational marginal:
+        // P(Y | do(X)) = P(Y). The causal EFFECT is zero, not the probability.
+        expression: "P(Y | do(X)) = P(Y)",
         expressionTree: {
-          type: "constant",
-          value: "0"
+          type: "probability",
+          variables: ["Y"],
+          conditionedOn: []
         },
         summationVariables: [],
         factors: [
           {
             kind: "zero",
-            expression: "0",
+            expression: "P(Y)",
             variables: ["Y"],
-            conditionedOn: ["X"]
+            conditionedOn: []
           }
         ]
       },

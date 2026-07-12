@@ -4,18 +4,20 @@ import {
   DenseMatrix,
   FisherZTest,
   GSquareTest,
+  KciTest,
   type BackgroundKnowledgeShape,
-  type ConditionalIndependenceTest
+  type ConditionalIndependenceTest,
+  type KciTestOptions
 } from "@causal-js/core";
 
 import type { PcOptions, PcResult, PcUcPriority, PcUcRule } from "./contracts";
 import { pc } from "./pc";
 
-export type PcWorkerCiTestKind = "fisher-z" | "chi-square" | "g-square";
+export type PcWorkerCiTestKind = "fisher-z" | "chi-square" | "g-square" | "kci";
 
-export interface PcWorkerCiTestSpec {
-  kind: PcWorkerCiTestKind;
-}
+export type PcWorkerCiTestSpec =
+  | { kind: "fisher-z" | "chi-square" | "g-square" }
+  | { kind: "kci"; options?: KciTestOptions };
 
 export interface SerializablePcTaskOptions {
   data: readonly (readonly number[])[];
@@ -36,6 +38,8 @@ function createCiTest(spec: PcWorkerCiTestSpec, data: DenseMatrix): ConditionalI
       return new ChiSquareTest(data);
     case "g-square":
       return new GSquareTest(data);
+    case "kci":
+      return new KciTest(data, spec.options ?? {});
     default:
       throw new Error(`Unsupported PC worker CI test kind: ${String((spec as { kind: string }).kind)}`);
   }

@@ -8,6 +8,7 @@ import {
   GRAPH_EDGE_PATTERN,
   GRAPH_KIND,
   GSquareTest,
+  KciTest,
   NODE_TYPE,
   type ConditionalIndependenceTest,
   type EdgeDescriptor,
@@ -24,6 +25,7 @@ import {
   ges,
   gin,
   grasp,
+  mvpc,
   pc,
   rcd,
   type CamuvOptions,
@@ -33,6 +35,7 @@ import {
   type GesOptions,
   type GinOptions,
   type GraspOptions,
+  type MvpcOptions,
   type PcOptions,
   type RcdOptions
 } from "@causal-js/discovery";
@@ -55,6 +58,7 @@ interface DiscoveryDefinition<Options, Result> {
 
 const discoveryDefinitions = {
   pc: { fn: pc, defaultGraphField: "graph" },
+  mvpc: { fn: mvpc, defaultGraphField: "graph" },
   fci: { fn: fci, defaultGraphField: "graph" },
   ges: { fn: ges, defaultGraphField: "cpdag" },
   cdnod: { fn: cdnod, defaultGraphField: "graph" },
@@ -207,10 +211,43 @@ function isGraphShape(value: unknown): value is GraphShape {
   );
 }
 
+/**
+ * Pearl's G_X-bar: removes ALL outgoing edges of the treatment.
+ *
+ * Correct for the frontdoor-criterion checks in identify-backend.ts. Do NOT
+ * use it for adjustment-set validity: paired with the generalized forbidden
+ * set it removes too many edges (it hides collider paths through non-causal
+ * children of the treatment) — use buildProperBackdoorGraph there.
+ */
 export function buildBackdoorGraph(graph: CausalGraph, treatment: string): CausalGraph {
   const backdoor = graph.clone();
   for (const childId of graph.getChildIds(treatment)) {
     backdoor.removeEdge(treatment, childId);
+  }
+  if (backdoor.getKind() !== GRAPH_KIND.generic) {
+    backdoor.setKind(GRAPH_KIND.generic);
+  }
+  return backdoor;
+}
+
+/**
+ * Proper backdoor graph (van der Zander et al.): removes only the first edge
+ * X→c of proper causal paths from treatment to outcome, i.e. edges into
+ * children of X that lie on a proper causal path. Paired with the generalized
+ * forbidden set (forbiddenAdjustmentNodes) this yields the constructive
+ * backdoor criterion — sound and complete for adjustment in DAGs.
+ */
+export function buildProperBackdoorGraph(
+  graph: CausalGraph,
+  treatment: string,
+  outcome: string
+): CausalGraph {
+  const properPathNodes = new Set(properCausalPathNodes(graph, treatment, outcome));
+  const backdoor = graph.clone();
+  for (const childId of graph.getChildIds(treatment)) {
+    if (properPathNodes.has(childId)) {
+      backdoor.removeEdge(treatment, childId);
+    }
   }
   if (backdoor.getKind() !== GRAPH_KIND.generic) {
     backdoor.setKind(GRAPH_KIND.generic);
@@ -472,6 +509,15 @@ export function rebuildDiscoveryOptions(
           ciTest: rebuildCiTest((original.options as PcOptions).ciTest, resampledData)
         }
       };
+    case "mvpc":
+      // mvpc owns its CI tests internally; only the data needs swapping.
+      return {
+        ...original,
+        options: {
+          ...(original.options as MvpcOptions),
+          data: resampledData
+        }
+      };
     case "fci":
       return {
         ...original,
@@ -562,6 +608,11 @@ function rebuildCiTest(
   }
   if (ciTest instanceof GSquareTest) {
     return new GSquareTest(data);
+  }
+  // Rebuild with the original options; the generic constructor fallback
+  // below would silently drop them.
+  if (ciTest instanceof KciTest) {
+    return new KciTest(data, ciTest.options);
   }
 
   const TestConstructor = (ciTest as unknown as { constructor: new (data: NumericMatrix) => ConditionalIndependenceTest })

@@ -115,7 +115,10 @@ export function diagnostic(
 }
 
 export function buildZeroEffectEstimand(treatment: string, outcome: string): IdentificationEstimandSpec {
-  const expressionTree = constantNode("0");
+  // With no directed path, intervening on the treatment leaves the outcome
+  // distribution unchanged: P(Y | do(X)) = P(Y). The causal effect is zero;
+  // the interventional probability is NOT the constant 0.
+  const expressionTree = probabilityNode([outcome]);
   return {
     strategy: "zero-effect",
     query: renderQuery(treatment, outcome),
@@ -126,9 +129,9 @@ export function buildZeroEffectEstimand(treatment: string, outcome: string): Ide
     factors: [
       {
         kind: "zero",
-        expression: "0",
+        expression: renderProbability([outcome]),
         variables: [outcome],
-        conditionedOn: [treatment]
+        conditionedOn: []
       }
     ]
   };

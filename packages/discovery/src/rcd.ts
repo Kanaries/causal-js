@@ -487,7 +487,12 @@ function percentile(values: readonly number[], quantile: number): number {
   return (sorted[lower] ?? 0) * (1 - weight) + (sorted[upper] ?? 0) * weight;
 }
 
-function getMedianKernelWidth(rows: readonly (readonly number[])[]): number {
+/**
+ * Median-distance bandwidth capped at the first 100 rows — intentional parity
+ * with lingam's hsic.get_kernel_width (RCD reference). Exported for tests
+ * (@internal).
+ */
+export function rcdMedianKernelWidth(rows: readonly (readonly number[])[]): number {
   const sample = rows.slice(0, Math.min(100, rows.length));
   const distances: number[] = [];
 
@@ -514,51 +519,43 @@ function getMedianKernelWidth(rows: readonly (readonly number[])[]): number {
   return Number.isFinite(width) && width > 0 ? width : 1;
 }
 
-function getScottKernelWidth(rows: readonly (readonly number[])[]): number {
+/**
+ * statsmodels _select_sigma: A = min(std(ddof=1), IQR/1.349) per column, with
+ * the IQR computed like scipy's scoreatpercentile (linear interpolation); IQR
+ * of exactly 0 falls back to the standard deviation.
+ */
+function statsmodelsSelectSigma(values: readonly number[]): number {
+  const sigma = std(values);
+  const iqr = (percentile(values, 0.75) - percentile(values, 0.25)) / 1.349;
+  return iqr > 0 ? Math.min(sigma, iqr) : sigma;
+}
+
+function statsmodelsBandwidth(rows: readonly (readonly number[])[], constant: number): number {
   const sampleSize = rows.length;
   const dimension = rows[0]?.length ?? 0;
   if (sampleSize <= 1 || dimension === 0) {
     return 1;
   }
 
-  const scales = Array.from({ length: dimension }, (_, index) => {
+  // Reference RCD only ever passes single-column matrices; for defensive
+  // multi-column input we average per-column bandwidths (documented
+  // deviation — the numpy reference errors on broadcasting there).
+  const widths = Array.from({ length: dimension }, (_, index) => {
     const values = rows.map((row) => row[index] ?? 0);
-    return std(values);
-  }).filter((value) => Number.isFinite(value) && value > 0);
-
-  if (scales.length === 0) {
-    return 1;
-  }
-
-  const sigma = mean(scales);
-  const factor = Math.pow(sampleSize, -1 / (dimension + 4));
-  const width = sigma * factor;
+    return constant * statsmodelsSelectSigma(values) * Math.pow(sampleSize, -0.2);
+  });
+  const width = mean(widths);
   return Number.isFinite(width) && width > 0 ? width : 1;
 }
 
-function getSilvermanKernelWidth(rows: readonly (readonly number[])[]): number {
-  const sampleSize = rows.length;
-  const dimension = rows[0]?.length ?? 0;
-  if (sampleSize <= 1 || dimension === 0) {
-    return 1;
-  }
+/** statsmodels bw_scott: 1.059 * A * n^-0.2. Exported for tests (@internal). */
+export function getScottKernelWidth(rows: readonly (readonly number[])[]): number {
+  return statsmodelsBandwidth(rows, 1.059);
+}
 
-  const scales = Array.from({ length: dimension }, (_, index) => {
-    const values = rows.map((row) => row[index] ?? 0);
-    const sigma = std(values);
-    const iqr = percentile(values, 0.75) - percentile(values, 0.25);
-    const robustSigma = Math.min(sigma, iqr / 1.34);
-    return robustSigma > 0 ? robustSigma : sigma;
-  }).filter((value) => Number.isFinite(value) && value > 0);
-
-  if (scales.length === 0) {
-    return 1;
-  }
-
-  const sigma = mean(scales);
-  const factor = Math.pow((sampleSize * (dimension + 2)) / 4, -1 / (dimension + 4));
-  const width = sigma * factor;
-  return Number.isFinite(width) && width > 0 ? width : 1;
+/** statsmodels bw_silverman: 0.9 * A * n^-0.2. Exported for tests (@internal). */
+export function getSilvermanKernelWidth(rows: readonly (readonly number[])[]): number {
+  return statsmodelsBandwidth(rows, 0.9);
 }
 
 function getKernelWidth(
@@ -572,7 +569,7 @@ function getKernelWidth(
       return getSilvermanKernelWidth(rows);
     case "mdbs":
     default:
-      return getMedianKernelWidth(rows);
+      return rcdMedianKernelWidth(rows);
   }
 }
 
@@ -776,7 +773,8 @@ function getColumn(rows: readonly (readonly number[])[], index: number): number[
   return rows.map((row) => row[index] ?? 0);
 }
 
-function fitResidualAndCoefficients(
+/** OLS residualization with intercept. Exported for tests (@internal). */
+export function fitResidualAndCoefficients(
   rows: readonly (readonly number[])[],
   endogIndex: number,
   exogIndices: readonly number[],
@@ -827,26 +825,25 @@ function residualsFromCoefficients(
   });
 }
 
-function fitResidualAndCoefficientsByMlhsicr(
+/**
+ * Builds the MLHSICR objective (sum of HSIC scores between the residual and
+ * each regressor, with the reference's coefficient-dependent width update).
+ * Exported for tests (@internal).
+ */
+export function buildMlhsicrObjective(
   rows: readonly (readonly number[])[],
   endogIndex: number,
-  exogIndices: readonly number[],
-  ridgePenalty: number
-): { residuals: number[]; coefficients: number[] } {
-  if (exogIndices.length === 0) {
-    return { residuals: getColumn(rows, endogIndex), coefficients: [] };
-  }
-
-  const baseFit = fitResidualAndCoefficients(rows, endogIndex, exogIndices, ridgePenalty);
+  exogIndices: readonly number[]
+): (coefficients: readonly number[]) => number {
   const designColumns = exogIndices.map((index) => getColumn(rows, index).map((value) => [value]));
-  const widthList = designColumns.map((columnRows) => getMedianKernelWidth(columnRows));
+  const widthList = designColumns.map((columnRows) => rcdMedianKernelWidth(columnRows));
   const centeredGrams = designColumns.map((columnRows, index) =>
     getGramMatrix(columnRows, widthList[index] ?? 1).centered
   );
   const targetColumn = getColumn(rows, endogIndex).map((value) => [value]);
-  const widthXi = getMedianKernelWidth(targetColumn);
+  const widthXi = rcdMedianKernelWidth(targetColumn);
 
-  function objective(coefficients: readonly number[]): number {
+  return (coefficients: readonly number[]): number => {
     const residuals = residualsFromCoefficients(rows, endogIndex, exogIndices, coefficients);
     const residualRows = residuals.map((value) => [value]);
     let width = widthXi;
@@ -859,9 +856,23 @@ function fitResidualAndCoefficientsByMlhsicr(
       (sum, centeredGram) => sum + hsicScoreRowsWithCenteredGram(residualRows, centeredGram, width),
       0
     );
-  }
+  };
+}
 
-  const coefficients = [...baseFit.coefficients];
+/**
+ * Coordinate pattern search used by MLHSICR (a coarse stand-in for the
+ * reference's L-BFGS-B). Exported for tests (@internal).
+ *
+ * Each coefficient is probed independently: a coefficient whose probes both
+ * fail is restored to its previous value regardless of whether earlier
+ * coefficients improved in the same pass (the old shared `improved` flag left
+ * failed coefficients stranded at the worse probed value).
+ */
+export function coordinatePatternSearch(
+  objective: (coefficients: readonly number[]) => number,
+  initialCoefficients: readonly number[]
+): number[] {
+  const coefficients = [...initialCoefficients];
   let bestScore = objective(coefficients);
   let stepScale = Math.max(
     0.1,
@@ -869,28 +880,48 @@ function fitResidualAndCoefficientsByMlhsicr(
   );
 
   for (let iteration = 0; iteration < 25 && stepScale > 1e-4; iteration += 1) {
-    let improved = false;
+    let improvedAny = false;
     for (let coefficientIndex = 0; coefficientIndex < coefficients.length; coefficientIndex += 1) {
       const current = coefficients[coefficientIndex] ?? 0;
+      let improvedThis = false;
       for (const direction of [-1, 1] as const) {
         coefficients[coefficientIndex] = current + direction * stepScale;
         const candidateScore = objective(coefficients);
         if (candidateScore + 1e-12 < bestScore) {
           bestScore = candidateScore;
-          improved = true;
+          improvedThis = true;
+          improvedAny = true;
           break;
         }
       }
 
-      if (!improved) {
+      if (!improvedThis) {
         coefficients[coefficientIndex] = current;
       }
     }
 
-    if (!improved) {
+    if (!improvedAny) {
       stepScale *= 0.5;
     }
   }
+
+  return coefficients;
+}
+
+/** Exported for tests (@internal). */
+export function fitResidualAndCoefficientsByMlhsicr(
+  rows: readonly (readonly number[])[],
+  endogIndex: number,
+  exogIndices: readonly number[],
+  ridgePenalty: number
+): { residuals: number[]; coefficients: number[] } {
+  if (exogIndices.length === 0) {
+    return { residuals: getColumn(rows, endogIndex), coefficients: [] };
+  }
+
+  const baseFit = fitResidualAndCoefficients(rows, endogIndex, exogIndices, ridgePenalty);
+  const objective = buildMlhsicrObjective(rows, endogIndex, exogIndices);
+  const coefficients = coordinatePatternSearch(objective, baseFit.coefficients);
 
   return {
     residuals: residualsFromCoefficients(rows, endogIndex, exogIndices, coefficients),

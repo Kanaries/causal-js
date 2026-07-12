@@ -137,6 +137,24 @@ function invertMatrix(matrix: readonly (readonly number[])[]): number[][] {
   return augmented.map((row) => row.slice(size));
 }
 
+/**
+ * Inverts a parent covariance submatrix. The regular path is plain
+ * Gauss-Jordan (identical results to before); only when the matrix is exactly
+ * singular (e.g. duplicated columns in the data) does it retry with a tiny
+ * ridge on the diagonal so score-based searches survive degenerate data.
+ */
+function invertParentCovariance(matrix: readonly (readonly number[])[]): number[][] {
+  try {
+    return invertMatrix(matrix);
+  } catch {
+    const ridge = 1e-10;
+    const regularized = matrix.map((row, rowIndex) =>
+      row.map((value, columnIndex) => (rowIndex === columnIndex ? value + ridge : value))
+    );
+    return invertMatrix(regularized);
+  }
+}
+
 function selectSubmatrix(matrix: readonly (readonly number[])[], indices: readonly number[]): number[][] {
   return indices.map((rowIndex) => {
     const row = matrix[rowIndex];
@@ -155,6 +173,10 @@ function selectSubmatrix(matrix: readonly (readonly number[])[], indices: readon
 }
 
 export class GaussianBicScore implements LocalScoreFunction {
+  /** Lower bound applied to (conditional) variances so collinear or constant
+   * columns produce a large-but-finite log-likelihood instead of crashing. */
+  private static readonly MIN_VARIANCE = 1e-10;
+
   readonly name = "local_score_BIC";
 
   private readonly penaltyDiscount: number;
@@ -179,10 +201,14 @@ export class GaussianBicScore implements LocalScoreFunction {
     let scoreValue: number;
 
     if (sortedParents.length === 0) {
-      const variance = this.covariance[node]?.[node];
-      if (variance === undefined || variance <= 0) {
+      const rawVariance = this.covariance[node]?.[node];
+      if (rawVariance === undefined) {
         throw new Error(`Invalid variance for node ${node}`);
       }
+      // Clamp instead of throwing: constant or collinear columns yield a
+      // degenerate variance; a large negative log-likelihood keeps search
+      // algorithms (GES, GRaSP, exact search) running on such data.
+      const variance = Math.max(rawVariance, GaussianBicScore.MIN_VARIANCE);
       scoreValue = this.sampleSize * Math.log(variance);
     } else {
       const yx = selectSubmatrix(this.covariance, [node, ...sortedParents])[0]?.slice(1);
@@ -191,7 +217,7 @@ export class GaussianBicScore implements LocalScoreFunction {
         throw new Error(`Unable to build covariance row for node ${node}`);
       }
 
-      const xxInverse = invertMatrix(xx);
+      const xxInverse = invertParentCovariance(xx);
       let quadratic = 0;
       for (let rowIndex = 0; rowIndex < yx.length; rowIndex += 1) {
         const rowValue = yx[rowIndex];
@@ -211,10 +237,10 @@ export class GaussianBicScore implements LocalScoreFunction {
         quadratic += rowValue * inner;
       }
 
-      const variance = (this.covariance[node]?.[node] ?? 0) - quadratic;
-      if (variance <= 0) {
-        throw new Error(`Conditional variance must be positive for node ${node}`);
-      }
+      const variance = Math.max(
+        (this.covariance[node]?.[node] ?? 0) - quadratic,
+        GaussianBicScore.MIN_VARIANCE
+      );
 
       scoreValue =
         this.sampleSize * Math.log(variance) +

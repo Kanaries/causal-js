@@ -87,6 +87,29 @@ describe("cdnod", () => {
     });
   });
 
+  it("rejects observed node labels colliding with the context label", () => {
+    const { data, context } = buildDomainShiftChainData(30);
+
+    expect(() =>
+      cdnod({
+        data,
+        context,
+        nodeLabels: ["A", "C", "B"],
+        createCiTest: (augmentedData) => new FisherZTest(augmentedData)
+      })
+    ).toThrow(/contextLabel/);
+
+    // Renaming the context node resolves the collision.
+    const result = cdnod({
+      data,
+      context,
+      nodeLabels: ["A", "C", "B"],
+      contextLabel: "domain",
+      createCiTest: (augmentedData) => new FisherZTest(augmentedData)
+    });
+    expect(result.contextNodeIndex).toBe(3);
+  });
+
   it("supports the shared pc uc variants on the augmented graph", () => {
     const { data, context } = buildDomainShiftChainData(90);
 

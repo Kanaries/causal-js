@@ -604,60 +604,6 @@ function calEWithGin(
   });
 }
 
-function calDepForGin(
-  data: readonly (readonly number[])[],
-  covarianceValues: readonly (readonly number[])[],
-  x: readonly number[],
-  z: readonly number[]
-): number {
-  const e = calEWithGin(data, covarianceValues, x, z);
-  let statistic = 0;
-
-  for (const zIndex of z) {
-    statistic += 1 - hsicGammaPValue(e, data.map((row) => row[zIndex] ?? 0));
-  }
-
-  return statistic / z.length;
-}
-
-function findRoot(
-  data: readonly (readonly number[])[],
-  covarianceValues: readonly (readonly number[])[],
-  clusters: readonly (readonly number[])[],
-  causalOrder: readonly (readonly number[])[]
-): number[] {
-  if (clusters.length === 1) {
-    return [...(clusters[0] ?? [])];
-  }
-
-  let root = [...(clusters[0] ?? [])];
-  let bestScore = Number.POSITIVE_INFINITY;
-
-  for (const candidate of clusters) {
-    for (const other of clusters) {
-      if (candidate === other) {
-        continue;
-      }
-
-      const x = [candidate[0]!, other[0]!];
-      const z = candidate.slice(1);
-
-      for (const cluster of causalOrder) {
-        x.push(cluster[0]!);
-        z.push(cluster[1]!);
-      }
-
-      const score = calDepForGin(data, covarianceValues, x, z);
-      if (score < bestScore) {
-        bestScore = score;
-        root = [...candidate];
-      }
-    }
-  }
-
-  return root;
-}
-
 function createIndependenceTest(method: GinIndependenceTestMethod): (left: readonly number[], right: readonly number[]) => number {
   if (method !== "hsic" && method !== "kci") {
     throw new Error(`Unsupported independence test method: ${method}`);
@@ -695,6 +641,11 @@ export function gin(options: GinOptions): GinResult {
       const residual = calEWithGin(data, covarianceValues, cluster, remainVars);
       const pValues: number[] = [];
 
+      // Intentional divergence from causal-learn GIN.py: upstream iterates
+      // `for z in range(len(remain_var_set))` and indexes `data[:, [z]]`,
+      // testing columns 0..k-1 instead of the actual remaining variables.
+      // We test the real variable columns, matching the GIN paper. See
+      // docs/testing/external-regression.md (Known intentional divergences).
       for (const variable of remainVars) {
         pValues.push(indepTest(data.map((row) => row[variable] ?? 0), residual));
       }
@@ -758,6 +709,8 @@ export function gin(options: GinOptions): GinResult {
         );
         const pValues: number[] = [];
 
+        // Same intentional divergence as in the clustering phase: test the
+        // actual variable columns, not positional indices (causal-learn bug).
         for (const variable of [...z, ...clusterI2]) {
           pValues.push(indepTest(data.map((row) => row[variable] ?? 0), residual));
         }

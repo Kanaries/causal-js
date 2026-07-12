@@ -1,4 +1,11 @@
-import { CausalGraph, EDGE_ENDPOINT, GRAPH_KIND, type BackgroundKnowledge } from "@causal-js/core";
+import {
+  CausalGraph,
+  classifyEdge,
+  EDGE_ENDPOINT,
+  GRAPH_EDGE_PATTERN,
+  GRAPH_KIND,
+  type BackgroundKnowledge
+} from "@causal-js/core";
 
 import type { FciOptions, FciResult, SeparationSetEntry } from "./contracts";
 import { finalizeGraphShape } from "./graph-result";
@@ -118,6 +125,12 @@ function canOrientArrowhead(
     return false;
   }
 
+  // Intentional deviation from causal-learn's is_arrow_point_allowed
+  // (FCI.py:294-305): upstream skips the background-knowledge check when the
+  // reverse endpoint is CIRCLE and never consults required edges here. We
+  // always honor forbidden(from,to) and required(to,from), so orientations
+  // never contradict user knowledge. Outputs can differ from causal-learn
+  // when background knowledge is supplied.
   if (backgroundKnowledge?.isForbidden(from, to) || backgroundKnowledge?.isRequired(to, from)) {
     return false;
   }
@@ -545,8 +558,7 @@ function removeByPossibleDsep(
   graph: CausalGraph,
   ciTest: CountedCiTest,
   alpha: number,
-  sepsets: SepsetMap,
-  maxPathLength: number
+  sepsets: SepsetMap
 ): void {
   const edges = [...graph.getEdges()];
 
@@ -565,9 +577,13 @@ function removeByPossibleDsep(
       [edge.node1, edge.node2],
       [edge.node2, edge.node1]
     ] as const) {
-      const possibleDsep = getPossibleDsep(graph, source, target, maxPathLength);
+      // causal-learn hardcodes -1 here (FCI.py:1013/1037): the user-facing
+      // maxPathLength option only applies to ruleR4B.
+      const possibleDsep = getPossibleDsep(graph, source, target, -1);
 
-      for (let size = possibleDsep.length; size >= 2; size -= 1) {
+      // Smallest-first, matching DepthChoiceGenerator: records the minimal
+      // separating set and avoids exponential waste on high-order CI tests.
+      for (let size = 2; size <= possibleDsep.length; size += 1) {
         for (const choice of combinations(
           possibleDsep.map((_, index) => index),
           size
@@ -1230,6 +1246,103 @@ function shouldRunInitialR4B(backgroundKnowledge?: BackgroundKnowledge): boolean
   return hasForbiddenRules && hasRequiredRules && hasTierConstraints;
 }
 
+/**
+ * visibleEdgeHelperVisit / visibleEdgeHelper / defVisible port
+ * (FCI.py:912-968): a directed PAG edge A -> B is "definitely visible" when
+ * some vertex C not adjacent to B reaches A by an arrow (directly or through
+ * a chain of colliders that are parents of B).
+ */
+function visibleEdgeHelperVisit(
+  graph: CausalGraph,
+  nodeC: string,
+  nodeA: string,
+  nodeB: string,
+  path: string[]
+): boolean {
+  if (path.includes(nodeA)) {
+    return false;
+  }
+  path.push(nodeA);
+
+  if (nodeA === nodeB) {
+    return true;
+  }
+
+  for (const nodeD of graph.getNodeIdsInto(nodeA, EDGE_ENDPOINT.arrow)) {
+    if (graph.getParentIds(nodeC).includes(nodeD)) {
+      return true;
+    }
+    if (!graph.isDefColliderByIds(nodeD, nodeC, nodeA)) {
+      continue;
+    }
+    if (!graph.getParentIds(nodeB).includes(nodeC)) {
+      continue;
+    }
+    if (visibleEdgeHelperVisit(graph, nodeD, nodeC, nodeB, path)) {
+      return true;
+    }
+  }
+
+  path.pop();
+  return false;
+}
+
+function visibleEdgeHelper(graph: CausalGraph, nodeA: string, nodeB: string): boolean {
+  const path = [nodeA];
+  for (const nodeC of graph.getNodeIdsInto(nodeA, EDGE_ENDPOINT.arrow)) {
+    if (graph.getParentIds(nodeA).includes(nodeC)) {
+      return true;
+    }
+    if (visibleEdgeHelperVisit(graph, nodeC, nodeA, nodeB, path)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isDefVisible(graph: CausalGraph, tailNode: string, headNode: string): boolean {
+  for (const nodeC of graph.getAdjacentNodeIds(tailNode)) {
+    if (nodeC !== headNode && !graph.isAdjacentTo(nodeC, headNode)) {
+      if (graph.getEndpoint(nodeC, tailNode) === EDGE_ENDPOINT.arrow) {
+        return true;
+      }
+    }
+  }
+  return visibleEdgeHelper(graph, tailNode, headNode);
+}
+
+/**
+ * Port of get_color_edges (FCI.py:971-997): annotates every directed
+ * (tail-arrow) PAG edge with
+ *   - pathType: "dd" (definitely direct: no other semi-directed path from
+ *     tail to head once the edge is removed) or "pd" (possibly direct);
+ *   - visibility: "nl" (definitely visible: no latent confounder between the
+ *     endpoints) or "pl" (possibly invisible).
+ * Stored as edge metadata so the result shape stays backward-compatible.
+ */
+function annotateEdgeVisibility(graph: CausalGraph): void {
+  for (const edge of graph.getEdges()) {
+    const pattern = classifyEdge(edge.endpoint1, edge.endpoint2);
+    if (pattern !== GRAPH_EDGE_PATTERN.directed) {
+      continue;
+    }
+    const tailNode = edge.endpoint1 === EDGE_ENDPOINT.tail ? edge.node1 : edge.node2;
+    const headNode = edge.endpoint1 === EDGE_ENDPOINT.tail ? edge.node2 : edge.node1;
+
+    const probe = graph.clone();
+    probe.removeEdge(edge.node1, edge.node2);
+    const pathType = existsSemiDirectedPath(probe, tailNode, headNode) ? "pd" : "dd";
+
+    const visibility = isDefVisible(graph, tailNode, headNode) ? "nl" : "pl";
+
+    graph.setEdgeMetadata(edge.node1, edge.node2, {
+      ...(graph.getEdgeMetadata(edge.node1, edge.node2) ?? {}),
+      pathType,
+      visibility
+    });
+  }
+}
+
 export function fci(options: FciOptions): FciResult {
   const alpha = options.alpha ?? 0.05;
   const maxPathLength = options.maxPathLength ?? -1;
@@ -1238,7 +1351,7 @@ export function fci(options: FciOptions): FciResult {
 
   reorientAllWith(graph, EDGE_ENDPOINT.circle);
   rule0(graph, sepsets, options.backgroundKnowledge);
-  removeByPossibleDsep(graph, ciTest, alpha, sepsets, maxPathLength);
+  removeByPossibleDsep(graph, ciTest, alpha, sepsets);
   reorientAllWith(graph, EDGE_ENDPOINT.circle);
   rule0(graph, sepsets, options.backgroundKnowledge);
 
@@ -1265,6 +1378,8 @@ export function fci(options: FciOptions): FciResult {
     changed = rule9(graph) || changed;
     changed = rule10(graph) || changed;
   }
+
+  annotateEdgeVisibility(graph);
 
   return {
     graph: finalizeGraphShape(graph, {

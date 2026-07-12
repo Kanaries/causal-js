@@ -167,6 +167,119 @@ describe("GraphIR", () => {
     expect(extended.isUndirectedFromTo("A", "B")).toBe(false);
   });
 
+  it("satisfies conversion round-trip properties on random DAGs", () => {
+    const buildDag = (nodeCount: number, edges: readonly { from: number; to: number }[]): GraphIR => {
+      const dag = new GraphIR({
+        kind: GRAPH_KIND.dag,
+        nodes: Array.from({ length: nodeCount }, (_, index) => ({ id: `X${index}` }))
+      });
+      for (const edge of edges) {
+        dag.addDirectedEdge(`X${edge.from}`, `X${edge.to}`);
+      }
+      return dag;
+    };
+
+    const canonicalEdges = (graph: GraphIR): string[] =>
+      graph
+        .getEdges()
+        .map((edge) => {
+          const forward = `${edge.node1}[${edge.endpoint1}]${edge.node2}[${edge.endpoint2}]`;
+          const backward = `${edge.node2}[${edge.endpoint2}]${edge.node1}[${edge.endpoint1}]`;
+          return forward < backward ? forward : backward;
+        })
+        .sort();
+
+    const skeleton = (graph: GraphIR): string[] =>
+      graph
+        .getEdges()
+        .map((edge) => [edge.node1, edge.node2].sort().join("-"))
+        .sort();
+
+    const vStructures = (graph: GraphIR): string[] => {
+      const result: string[] = [];
+      for (const node of graph.getNodeIds()) {
+        const parents = graph.getParentIds(node).sort();
+        for (let i = 0; i < parents.length; i += 1) {
+          for (let j = i + 1; j < parents.length; j += 1) {
+            if (!graph.isAdjacentTo(parents[i]!, parents[j]!)) {
+              result.push(`${parents[i]}->${node}<-${parents[j]}`);
+            }
+          }
+        }
+      }
+      return result.sort();
+    };
+
+    // Deterministic mulberry32 stream, matching tests/helpers/rng.ts.
+    const mulberry32 = (seed: number): (() => number) => {
+      let state = (seed >>> 0) || 1;
+      return () => {
+        state |= 0;
+        state = (state + 0x6d2b79f5) | 0;
+        let t = Math.imul(state ^ (state >>> 15), 1 | state);
+        t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    };
+
+    for (let seed = 1; seed <= 20; seed += 1) {
+      const random = mulberry32(seed);
+      const nodeCount = 8;
+      const edges: { from: number; to: number }[] = [];
+      for (let from = 0; from < nodeCount; from += 1) {
+        for (let to = from + 1; to < nodeCount; to += 1) {
+          if (random() < 0.35) {
+            edges.push({ from, to });
+          }
+        }
+      }
+
+      const dag = buildDag(nodeCount, edges);
+      const cpdag = dagToCpdag(dag);
+
+      // A consistent extension preserves skeleton and v-structures.
+      const extension = pdagToDag(cpdag);
+      expect(skeleton(extension), `seed ${seed}: extension skeleton`).toEqual(skeleton(dag));
+      expect(vStructures(extension), `seed ${seed}: extension v-structures`).toEqual(vStructures(dag));
+
+      // Every directed edge of the CPDAG survives in the extension.
+      for (const edge of cpdag.getEdges()) {
+        if (edge.endpoint1 === EDGE_ENDPOINT.tail && edge.endpoint2 === EDGE_ENDPOINT.arrow) {
+          expect(
+            extension.getParentIds(edge.node2).includes(edge.node1),
+            `seed ${seed}: directed edge ${edge.node1}->${edge.node2} preserved`
+          ).toBe(true);
+        }
+      }
+
+      // CPDAG is invariant across members of the equivalence class.
+      const cpdagAgain = dagToCpdag(extension);
+      expect(canonicalEdges(cpdagAgain), `seed ${seed}: cpdag idempotence`).toEqual(
+        canonicalEdges(cpdag)
+      );
+    }
+  });
+
+  it("removeNode only deletes edge metadata touching the removed node", () => {
+    // Node ids with suffix overlap ("B" vs "AB") must not cross-delete: the
+    // old substring match on "B::" wiped metadata for the AB--C edge.
+    const graph = new GraphIR({
+      kind: GRAPH_KIND.generic,
+      nodes: [{ id: "B" }, { id: "AB" }, { id: "C" }]
+    });
+    graph.setEdge("AB", "C", EDGE_ENDPOINT.tail, EDGE_ENDPOINT.arrow, { weight: 1 });
+    graph.setEdge("B", "C", EDGE_ENDPOINT.tail, EDGE_ENDPOINT.arrow, { weight: 2 });
+
+    graph.removeNode("B");
+
+    expect(graph.getEdgeMetadata("AB", "C")).toEqual({ weight: 1 });
+    expect(graph.getNode("B")).toBeUndefined();
+    // Serialization must not resurrect metadata for the removed edge.
+    const shape = graph.toShape();
+    expect(shape.edges).toHaveLength(1);
+    expect(shape.edges[0]).toMatchObject({ node1: "AB", node2: "C", metadata: { weight: 1 } });
+  });
+
   it("keeps legacy graph shapes compatible through CausalGraph", () => {
     const legacyShape = {
       nodes: [

@@ -89,6 +89,10 @@ console.log(stability.edgeFrequency);
 
 See [result-contract.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/result-contract.md) for the stable field-level result contract.
 
+Discovery outputs are mostly CPDAGs while the tasks accept only DAGs; see
+[discovery-to-tasks.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/discovery-to-tasks.md)
+and `resolveDagForTasks()` for the explicit bridge.
+
 ## When Not To Use This Layer
 
 - when you need full ID or counterfactual identification

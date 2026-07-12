@@ -4,7 +4,7 @@ import {
   asCausalGraph,
   assertDagLike,
   assertSingletonNodeQuery,
-  buildBackdoorGraph,
+  buildProperBackdoorGraph,
   dSeparates,
   forbiddenAdjustmentNodes,
   getMeasuredNodeIds,
@@ -33,7 +33,10 @@ function evaluateAdjustmentSet(
   const conditioningSet = uniqueSorted(candidateSet);
   const forbiddenNodes = forbiddenAdjustmentNodes(graph, treatment, outcome);
   const forbiddenOverlap = conditioningSet.filter((nodeId) => forbiddenNodes.includes(nodeId));
-  const backdoorGraph = buildBackdoorGraph(graph, treatment);
+  // Constructive backdoor criterion: generalized forbidden set + proper
+  // backdoor graph. Using Pearl's G_X-bar here was unsound (it hid collider
+  // paths through non-causal children of the treatment).
+  const backdoorGraph = buildProperBackdoorGraph(graph, treatment, outcome);
   const blockedInBackdoorGraph =
     forbiddenOverlap.length === 0 && dSeparates(backdoorGraph, treatment, outcome, conditioningSet);
 

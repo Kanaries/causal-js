@@ -41,4 +41,4 @@ console.log(result.candidateSets);
 
 ## Notes
 
-The MVP uses a DAG backdoor check and excludes forbidden descendants on proper causal paths. A valid set is not proof that the graph itself is correct.
+Validity uses the constructive backdoor criterion (van der Zander et al.): the generalized forbidden set (proper-causal-path nodes and their descendants) combined with d-separation in the proper backdoor graph, which removes only the first edge of each proper causal path. This is sound and complete for singleton DAG adjustment; in particular, colliders that are descendants of the treatment are correctly rejected. A valid set is not proof that the graph itself is correct.

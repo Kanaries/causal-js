@@ -1,8 +1,19 @@
 import { CausalGraph, GRAPH_KIND, type NumericMatrix } from "@causal-js/core";
 
 import type { ExactSearchOptions, ExactSearchResult } from "./contracts";
-import { finalizeGraphShape } from "./graph-result";
+import {
+  astarSearch,
+  generateParentGraph,
+  popcount,
+  queryBestStructure,
+  type ParentGraphEntry
+} from "./exact-search-astar";
 import { dagToCpdag } from "./graph-conversion";
+import { finalizeGraphShape } from "./graph-result";
+
+/** Realistic per-method node-count ceilings (score-call count is 2^(d-1) per node). */
+const MAX_NODES_DP = 18;
+const MAX_NODES_ASTAR = 24;
 
 function createNodeLabels(variableCount: number, nodeLabels?: readonly string[]): string[] {
   if (!nodeLabels) {
@@ -56,28 +67,55 @@ function normalizeAdjacencyMatrix(
   );
 }
 
-function maskContains(mask: number, nodeIndex: number): boolean {
-  return (mask & (1 << nodeIndex)) !== 0;
+/** Kahn's algorithm cycle check for the include-graph constraint. */
+function assertAcyclicIncludeGraph(adjacency: readonly (readonly number[])[]): void {
+  const size = adjacency.length;
+  const indegree = new Array<number>(size).fill(0);
+  for (let from = 0; from < size; from += 1) {
+    for (let to = 0; to < size; to += 1) {
+      if (adjacency[from]![to]) {
+        indegree[to]! += 1;
+      }
+    }
+  }
+  const queue: number[] = [];
+  for (let node = 0; node < size; node += 1) {
+    if (indegree[node] === 0) {
+      queue.push(node);
+    }
+  }
+  let visited = 0;
+  while (queue.length > 0) {
+    const node = queue.pop()!;
+    visited += 1;
+    for (let to = 0; to < size; to += 1) {
+      if (adjacency[node]![to]) {
+        indegree[to]! -= 1;
+        if (indegree[to] === 0) {
+          queue.push(to);
+        }
+      }
+    }
+  }
+  if (visited !== size) {
+    throw new Error("exactSearch includeGraph must be acyclic.");
+  }
 }
 
 function maskToIndices(mask: number, variableCount: number): number[] {
   const indices: number[] = [];
   for (let nodeIndex = 0; nodeIndex < variableCount; nodeIndex += 1) {
-    if (maskContains(mask, nodeIndex)) {
+    if ((mask & (1 << nodeIndex)) !== 0) {
       indices.push(nodeIndex);
     }
   }
   return indices;
 }
 
-function isSubsetOf(subsetMask: number, mask: number): boolean {
-  return (subsetMask & mask) === subsetMask;
-}
-
 function buildDag(
   variableCount: number,
   nodeLabels: readonly string[],
-  parentMasks: readonly number[]
+  parentMasks: ArrayLike<number>
 ): CausalGraph {
   const dag = new CausalGraph(nodeLabels.map((id) => ({ id })), { kind: GRAPH_KIND.dag });
 
@@ -90,17 +128,95 @@ function buildDag(
   return dag;
 }
 
+interface DpResult {
+  parentMasks: Int32Array<ArrayBufferLike>;
+  score: number;
+  evaluatedOrderStates: number;
+}
+
+/**
+ * Silander-Myllymaki dynamic program: per node, a best-parent-set table over
+ * COMPRESSED masks of its allowed parents (bps(W) = min(score(W),
+ * min_v bps(W \ {v}))), then the standard order DP over full masks. Exactly
+ * one score call per feasible (node, parent set): Theta(d * 2^(d-1)) total.
+ */
+function silanderMyllymakiDp(
+  parentGraphs: readonly (readonly ParentGraphEntry[])[],
+  variableCount: number
+): DpResult {
+  const subsetCount = 1 << variableCount;
+  const fullMask = subsetCount - 1;
+
+  const bestOrderScore = new Float64Array(subsetCount).fill(Number.POSITIVE_INFINITY);
+  const choice = new Int32Array(subsetCount).fill(-1);
+  bestOrderScore[0] = 0;
+
+  let evaluatedOrderStates = 0;
+  for (let mask = 1; mask < subsetCount; mask += 1) {
+    evaluatedOrderStates += 1;
+    for (let childIndex = 0; childIndex < variableCount; childIndex += 1) {
+      if ((mask & (1 << childIndex)) === 0) {
+        continue;
+      }
+      const predecessorMask = mask & ~(1 << childIndex);
+      if (!Number.isFinite(bestOrderScore[predecessorMask]!)) {
+        continue;
+      }
+      const best = queryBestStructure(parentGraphs[childIndex]!, predecessorMask);
+      if (!Number.isFinite(best.score)) {
+        continue;
+      }
+      const score = bestOrderScore[predecessorMask]! + best.score;
+      if (score < bestOrderScore[mask]!) {
+        bestOrderScore[mask] = score;
+        choice[mask] = childIndex;
+      }
+    }
+  }
+
+  if (!Number.isFinite(bestOrderScore[fullMask]!)) {
+    throw new Error("No valid DAG satisfies the exact search constraints.");
+  }
+
+  const parentMasks = new Int32Array(variableCount).fill(0);
+  let currentMask = fullMask;
+  while (currentMask !== 0) {
+    const childIndex = choice[currentMask]!;
+    if (childIndex < 0) {
+      throw new Error("Failed to reconstruct the optimal DAG.");
+    }
+    const predecessorMask = currentMask & ~(1 << childIndex);
+    parentMasks[childIndex] = queryBestStructure(
+      parentGraphs[childIndex]!,
+      predecessorMask
+    ).parentsMask;
+    currentMask = predecessorMask;
+  }
+
+  return { parentMasks, score: bestOrderScore[fullMask]!, evaluatedOrderStates };
+}
+
 export function exactSearch(options: ExactSearchOptions): ExactSearchResult {
   const variableCount = options.data.columns;
-  if (variableCount > 20) {
-    throw new Error("exactSearch is only intended for relatively small variable counts.");
+  const searchMethod = options.searchMethod ?? "astar";
+  if (searchMethod !== "dp" && searchMethod !== "astar") {
+    throw new Error(`Unsupported exactSearch searchMethod: ${String(searchMethod)}.`);
+  }
+
+  const maxNodes = searchMethod === "dp" ? MAX_NODES_DP : MAX_NODES_ASTAR;
+  if (variableCount > maxNodes) {
+    throw new Error(
+      `exactSearch with searchMethod="${searchMethod}" supports at most ${maxNodes} variables ` +
+        `(got ${variableCount}); constrain the space with maxParents or superGraph, or use an ` +
+        `approximate search (ges, grasp).`
+    );
   }
 
   const nodeLabels = createNodeLabels(variableCount, options.nodeLabels);
   const maxParents = options.maxParents ?? variableCount;
-  const searchMethod = options.searchMethod ?? "astar";
   const superGraph = normalizeAdjacencyMatrix(options.superGraph, variableCount, 1);
   const includeGraph = normalizeAdjacencyMatrix(options.includeGraph, variableCount, 0);
+  assertAcyclicIncludeGraph(includeGraph);
 
   const allowedParentMasks = Array.from({ length: variableCount }, (_, nodeIndex) =>
     superGraph.reduce((mask, row, parentIndex) => {
@@ -113,94 +229,46 @@ export function exactSearch(options: ExactSearchOptions): ExactSearchResult {
     }, 0)
   );
 
-  const subsetCount = 1 << variableCount;
-  const bestLocalScore = Array.from({ length: variableCount }, () =>
-    Array.from({ length: subsetCount }, () => Number.POSITIVE_INFINITY)
-  );
-  const bestParentMask = Array.from({ length: variableCount }, () =>
-    Array.from({ length: subsetCount }, () => 0)
-  );
-
-  let evaluatedParentSets = 0;
   for (let nodeIndex = 0; nodeIndex < variableCount; nodeIndex += 1) {
-    const allowedMask = allowedParentMasks[nodeIndex] ?? 0;
-    const requiredMask = requiredParentMasks[nodeIndex] ?? 0;
-
-    for (let predecessorMask = 0; predecessorMask < subsetCount; predecessorMask += 1) {
-      if (!isSubsetOf(requiredMask, predecessorMask)) {
-        continue;
-      }
-
-      const candidateMask = predecessorMask & allowedMask & ~(1 << nodeIndex);
-      let subsetMask = candidateMask;
-      while (true) {
-        if (isSubsetOf(requiredMask, subsetMask)) {
-          const parentIndices = maskToIndices(subsetMask, variableCount);
-          if (parentIndices.length <= maxParents) {
-            const score = options.score.score(nodeIndex, parentIndices);
-            evaluatedParentSets += 1;
-            if (score < bestLocalScore[nodeIndex]![predecessorMask]!) {
-              bestLocalScore[nodeIndex]![predecessorMask] = score;
-              bestParentMask[nodeIndex]![predecessorMask] = subsetMask;
-            }
-          }
-        }
-
-        if (subsetMask === 0) {
-          break;
-        }
-        subsetMask = (subsetMask - 1) & candidateMask;
-      }
+    if (popcount(requiredParentMasks[nodeIndex]!) > maxParents) {
+      throw new Error("exactSearch includeGraph requires more parents than maxParents allows.");
     }
   }
 
-  const bestOrderScore = Array.from({ length: subsetCount }, () => Number.POSITIVE_INFINITY);
-  const choice = Array.from({ length: subsetCount }, () => -1);
-  bestOrderScore[0] = 0;
+  const counters = { evaluatedParentSets: 0 };
+  const parentGraphs = Array.from({ length: variableCount }, (_, nodeIndex) =>
+    generateParentGraph(
+      options.score,
+      nodeIndex,
+      variableCount,
+      allowedParentMasks[nodeIndex]! & ~(1 << nodeIndex),
+      requiredParentMasks[nodeIndex]!,
+      maxParents,
+      counters
+    )
+  );
 
-  let evaluatedOrderStates = 0;
-  for (let mask = 1; mask < subsetCount; mask += 1) {
-    evaluatedOrderStates += 1;
+  let parentMasks: Int32Array<ArrayBufferLike>;
+  let bestScore: number;
+  let evaluatedOrderStates: number;
 
-    for (let childIndex = 0; childIndex < variableCount; childIndex += 1) {
-      if (!maskContains(mask, childIndex)) {
-        continue;
-      }
-
-      const predecessorMask = mask & ~(1 << childIndex);
-      const localScore = bestLocalScore[childIndex]![predecessorMask]!;
-      if (!Number.isFinite(localScore)) {
-        continue;
-      }
-
-      const score = bestOrderScore[predecessorMask]! + localScore;
-      if (score < bestOrderScore[mask]!) {
-        bestOrderScore[mask] = score;
-        choice[mask] = childIndex;
-      }
-    }
+  if (searchMethod === "dp") {
+    const result = silanderMyllymakiDp(parentGraphs, variableCount);
+    parentMasks = result.parentMasks;
+    bestScore = result.score;
+    evaluatedOrderStates = result.evaluatedOrderStates;
+  } else {
+    const result = astarSearch(parentGraphs, {
+      usePathExtension: options.usePathExtension ?? true,
+      useKCycleHeuristic: options.useKCycleHeuristic ?? false,
+      kCycleK: options.kCycleK ?? 3
+    });
+    parentMasks = result.structures;
+    bestScore = result.score;
+    evaluatedOrderStates = result.expandedStates;
   }
 
-  const fullMask = subsetCount - 1;
-  if (!Number.isFinite(bestOrderScore[fullMask]!)) {
-    throw new Error("No valid DAG satisfies the exact search constraints.");
-  }
-
-  const selectedParentMasks = Array.from({ length: variableCount }, () => 0);
-  let currentMask = fullMask;
-  while (currentMask !== 0) {
-    const childIndex = choice[currentMask];
-    if (childIndex === undefined || childIndex < 0) {
-      throw new Error("Failed to reconstruct the optimal DAG.");
-    }
-
-    const resolvedChildIndex: number = childIndex;
-    const predecessorMask = currentMask & ~(1 << resolvedChildIndex);
-    selectedParentMasks[resolvedChildIndex] = bestParentMask[resolvedChildIndex]![predecessorMask]!;
-    currentMask = predecessorMask;
-  }
-
-  const dag = buildDag(variableCount, nodeLabels, selectedParentMasks);
+  const dag = buildDag(variableCount, nodeLabels, parentMasks);
   const cpdag = dagToCpdag(dag);
 
   return {
@@ -212,9 +280,9 @@ export function exactSearch(options: ExactSearchOptions): ExactSearchResult {
       algorithm: "exact-search",
       preferredKind: GRAPH_KIND.cpdag
     }),
-    score: bestOrderScore[fullMask]!,
+    score: bestScore,
     searchMethod,
     evaluatedOrderStates,
-    evaluatedParentSets
+    evaluatedParentSets: counters.evaluatedParentSets
   };
 }

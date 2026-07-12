@@ -9,10 +9,19 @@ export interface AlgorithmDescriptor {
 export const algorithmCatalog: AlgorithmDescriptor[] = [
   {
     id: "pc",
-    summary: "Constraint-based discovery planned as the first portable algorithm.",
+    summary: "Constraint-based CPDAG discovery: stable skeleton search, all uc-rule/uc-priority collider variants, Meek rules, background knowledge, and Fisher-Z / chi-square / G-square / KCI tests.",
     availability: [
       { runtime: "node", supported: true, capabilities: ["cpu", "worker"] },
       { runtime: "browser", supported: true, capabilities: ["cpu", "worker"] }
+    ]
+  },
+  {
+    id: "mvpc",
+    summary:
+      "Missing-value PC: test-wise-deletion skeleton search plus permutation-based missingness correction (MV-Fisher-Z / MC-Fisher-Z).",
+    availability: [
+      { runtime: "node", supported: true, capabilities: ["cpu"] },
+      { runtime: "browser", supported: true, capabilities: ["cpu"] }
     ]
   },
   {
@@ -25,7 +34,7 @@ export const algorithmCatalog: AlgorithmDescriptor[] = [
   },
   {
     id: "ges",
-    summary: "Score-based search planned after the shared scoring interface lands.",
+    summary: "Greedy equivalence search over CPDAGs with insert/delete operators and Gaussian BIC or BDeu local scores.",
     availability: [
       { runtime: "node", supported: true, capabilities: ["cpu", "worker"] },
       { runtime: "browser", supported: true, capabilities: ["cpu", "worker"] }
@@ -57,7 +66,7 @@ export const algorithmCatalog: AlgorithmDescriptor[] = [
   },
   {
     id: "gin",
-    summary: "Hidden-causal cluster discovery for latent-variable models using kernel independence tests.",
+    summary: "Hidden-causal cluster discovery for latent-variable models using kernel independence tests. Note: intentionally fixes an upstream causal-learn indexing bug, so outputs follow the GIN paper rather than the Python implementation.",
     availability: [
       { runtime: "node", supported: true, capabilities: ["cpu"] },
       { runtime: "browser", supported: true, capabilities: ["cpu"] }
@@ -73,7 +82,7 @@ export const algorithmCatalog: AlgorithmDescriptor[] = [
   },
   {
     id: "rcd",
-    summary: "Linear non-Gaussian discovery with latent confounder detection using a portable OLS-plus-HSIC baseline.",
+    summary: "Linear non-Gaussian discovery with latent confounder detection (OLS or approximate MLHSICR residualization plus HSIC independence tests).",
     availability: [
       { runtime: "node", supported: true, capabilities: ["cpu"] },
       { runtime: "browser", supported: true, capabilities: ["cpu"] }

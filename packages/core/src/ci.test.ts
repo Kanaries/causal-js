@@ -93,3 +93,29 @@ describe("DSeparationTest", () => {
     expect(ci.test(0, 2, [1])).toBeGreaterThan(0.5);
   });
 });
+
+describe("MvFisherZTest", () => {
+  it("matches causal-learn MV_FisherZ on a deterministic missing-value dataset", async () => {
+    const { MvFisherZTest } = await import("./ci");
+    const { DenseMatrix } = await import("./stats");
+
+    // x1 missing when t % 7 == 0; x2 missing when t % 11 == 0 (t = 1..200).
+    const rows: number[][] = [];
+    for (let t = 1; t <= 200; t += 1) {
+      const x0 = Math.sin(t / 3);
+      const x1 = t % 7 === 0 ? Number.NaN : 0.8 * x0 + Math.cos(t / 5);
+      const rawX1 = 0.8 * x0 + Math.cos(t / 5);
+      const x2 = t % 11 === 0 ? Number.NaN : 0.7 * rawX1 + Math.sin(t / 7);
+      const x3 = Math.cos(t / 11);
+      rows.push([x0, x1, x2, x3]);
+    }
+    const test = new MvFisherZTest(new DenseMatrix(rows));
+
+    // Golden values from causal-learn CIT(data, "mv_fisherz") on this data.
+    expect(test.test(0, 1)).toBeCloseTo(0, 8);
+    expect(test.test(0, 2, [1])).toBeCloseTo(0.8475658864805731, 6);
+    expect(test.test(1, 3)).toBeCloseTo(0.544300652359069, 6);
+    expect(test.test(0, 3, [1, 2])).toBeCloseTo(0.674597632619218, 6);
+    expect(test.test(2, 3, [0])).toBeCloseTo(0.013035198196845066, 6);
+  });
+});

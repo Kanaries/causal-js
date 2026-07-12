@@ -1,6 +1,7 @@
 import { CausalGraph, GRAPH_KIND, NODE_TYPE } from "@causal-js/core";
 
 import type { CamuvOptions, CamuvResult } from "./contracts";
+import { bsplineBasis, fitPenalizedTerm } from "./psplines";
 import { finalizeGraphShape } from "./graph-result";
 
 type BandwidthMethod = NonNullable<CamuvOptions["bwMethod"]>;
@@ -148,29 +149,51 @@ function std(values: readonly number[]): number {
   return Math.sqrt(Math.max(variance, 0));
 }
 
+/**
+ * CAMUV.py's vendored select_sigma: min(std(ddof=1), IQR/1.349) with NO
+ * IQR>0 guard — degenerate data yields width 0 (callers fall back to 1,
+ * where the numpy reference would divide by zero).
+ */
 function selectSigma(values: readonly number[]): number {
   const iqr = (percentile(values, 0.75) - percentile(values, 0.25)) / 1.349;
-  return Math.min(std(values), iqr || Number.POSITIVE_INFINITY);
+  return Math.min(std(values), iqr);
 }
 
-function getScottBandwidth(rows: readonly (readonly number[])[]): number {
-  const values = rows.flat();
-  const sigma = selectSigma(values);
-  const n = values.length;
-  const width = 1.059 * sigma * n ** (-0.2);
+function camuvBandwidth(rows: readonly (readonly number[])[], constant: number): number {
+  const sampleSize = rows.length;
+  const dimension = rows[0]?.length ?? 0;
+  if (sampleSize <= 1 || dimension === 0) {
+    return 1;
+  }
+
+  // Per column with n = row count (the old code pooled rows.flat(), which
+  // mixed dimensions and used n = rows*cols). Reference call sites pass
+  // single-column data; multi-column input averages per-column widths
+  // (documented deviation — the numpy reference errors on broadcasting).
+  const widths = Array.from({ length: dimension }, (_, index) => {
+    const values = rows.map((row) => row[index] ?? 0);
+    return constant * selectSigma(values) * Math.pow(sampleSize, -0.2);
+  });
+  const width = widths.reduce((sum, value) => sum + value, 0) / widths.length;
   return Number.isFinite(width) && width > 0 ? width : 1;
 }
 
-function getSilvermanBandwidth(rows: readonly (readonly number[])[]): number {
-  const values = rows.flat();
-  const sigma = selectSigma(values);
-  const n = values.length;
-  const width = 0.9 * sigma * n ** (-0.2);
-  return Number.isFinite(width) && width > 0 ? width : 1;
+/** CAMUV.py bw_scott. Exported for tests (@internal). */
+export function getScottBandwidth(rows: readonly (readonly number[])[]): number {
+  return camuvBandwidth(rows, 1.059);
 }
 
-function getMedianKernelWidth(rows: readonly (readonly number[])[]): number {
-  const sample = rows.slice(0, Math.min(100, rows.length));
+/** CAMUV.py bw_silverman. Exported for tests (@internal). */
+export function getSilvermanBandwidth(rows: readonly (readonly number[])[]): number {
+  return camuvBandwidth(rows, 0.9);
+}
+
+/**
+ * Median-distance bandwidth over the FULL sample — CAMUV.py's get_width has
+ * no row cap, unlike lingam's RCD helper. Exported for tests (@internal).
+ */
+export function camuvMedianKernelWidth(rows: readonly (readonly number[])[]): number {
+  const sample = rows;
   const distances: number[] = [];
 
   for (let leftIndex = 0; leftIndex < sample.length; leftIndex += 1) {
@@ -208,7 +231,7 @@ function getKernelWidth(
     return getSilvermanBandwidth(rows);
   }
 
-  return getMedianKernelWidth(rows);
+  return camuvMedianKernelWidth(rows);
 }
 
 function getGramMatrix(rows: readonly (readonly number[])[], width: number): { gram: number[][]; centered: number[][] } {
@@ -634,7 +657,9 @@ function fitAdditivePolynomialResidual(
   explainedIndex: number,
   explanatoryIds: readonly number[],
   polynomialDegree: number,
-  ridgePenalty: number
+  ridgePenalty: number,
+  nSplines = 20,
+  psplineLambda = 0.6
 ): number[] {
   if (explanatoryIds.length === 0) {
     return getColumn(rows, explainedIndex);
@@ -675,6 +700,71 @@ function fitAdditiveSplineResidual(
   );
 }
 
+/**
+ * P-spline additive backfitting: same backfitting skeleton as the truncated
+ * power spline path, but each term uses a cubic B-spline basis with a
+ * second-order difference penalty (pygam-approximating).
+ */
+function fitPsplineBackfittingResidual(
+  rows: readonly (readonly number[])[],
+  explainedIndex: number,
+  explanatoryIds: readonly number[],
+  nSplines: number,
+  psplineLambda: number,
+  gamMaxIterations: number,
+  gamTolerance: number
+): number[] {
+  if (explanatoryIds.length === 0) {
+    return getColumn(rows, explainedIndex);
+  }
+
+  const y = getColumn(rows, explainedIndex);
+  const intercept = y.reduce((sum, value) => sum + value, 0) / y.length;
+  const centeredTarget = y.map((value) => value - intercept);
+  const termDesigns = explanatoryIds.map(
+    (explanatoryId) => bsplineBasis(getColumn(rows, explanatoryId), nSplines).design
+  );
+  const smoothTerms = termDesigns.map(() => Array.from({ length: rows.length }, () => 0));
+  const aggregate = Array.from({ length: rows.length }, () => 0);
+
+  for (let iteration = 0; iteration < gamMaxIterations; iteration += 1) {
+    let maxDelta = 0;
+
+    for (let termIndex = 0; termIndex < termDesigns.length; termIndex += 1) {
+      const currentTerm = smoothTerms[termIndex]!;
+      const partial = centeredTarget.map(
+        (value, rowIndex) => value - ((aggregate[rowIndex] ?? 0) - (currentTerm[rowIndex] ?? 0))
+      );
+      const fitted = centerVector(
+        fitPenalizedTerm(termDesigns[termIndex]!, partial, psplineLambda)
+      );
+
+      for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+        const previous = currentTerm[rowIndex] ?? 0;
+        const nextValue = fitted[rowIndex] ?? 0;
+        const delta = Math.abs(nextValue - previous);
+        if (delta > maxDelta) {
+          maxDelta = delta;
+        }
+        currentTerm[rowIndex] = nextValue;
+      }
+    }
+
+    aggregate.fill(0);
+    for (const term of smoothTerms) {
+      for (let rowIndex = 0; rowIndex < term.length; rowIndex += 1) {
+        aggregate[rowIndex] = (aggregate[rowIndex] ?? 0) + (term[rowIndex] ?? 0);
+      }
+    }
+
+    if (maxDelta <= gamTolerance) {
+      break;
+    }
+  }
+
+  return y.map((value, rowIndex) => value - intercept - (aggregate[rowIndex] ?? 0));
+}
+
 function fitAdditiveResidual(
   rows: readonly (readonly number[])[],
   explainedIndex: number,
@@ -684,15 +774,31 @@ function fitAdditiveResidual(
   gamMaxIterations: number,
   gamTolerance: number,
   polynomialDegree: number,
-  ridgePenalty: number
+  ridgePenalty: number,
+  nSplines = 20,
+  psplineLambda = 0.6
 ): number[] {
+  if (smoother === "pspline") {
+    return fitPsplineBackfittingResidual(
+      rows,
+      explainedIndex,
+      explanatoryIds,
+      nSplines,
+      psplineLambda,
+      gamMaxIterations,
+      gamTolerance
+    );
+  }
+
   if (smoother === "polynomial") {
     return fitAdditivePolynomialResidual(
       rows,
       explainedIndex,
       explanatoryIds,
       polynomialDegree,
-      ridgePenalty
+      ridgePenalty,
+      nSplines,
+      psplineLambda
     );
   }
 
@@ -739,7 +845,9 @@ function getResidualsMatrix(
   gamMaxIterations: number,
   gamTolerance: number,
   polynomialDegree: number,
-  ridgePenalty: number
+  ridgePenalty: number,
+  nSplines = 20,
+  psplineLambda = 0.6
 ): number[][] {
   const next = residualized.map((row) => [...row]);
   const residual = fitAdditiveResidual(
@@ -751,7 +859,9 @@ function getResidualsMatrix(
     gamMaxIterations,
     gamTolerance,
     polynomialDegree,
-    ridgePenalty
+    ridgePenalty,
+    nSplines,
+    psplineLambda
   );
   for (let rowIndex = 0; rowIndex < next.length; rowIndex += 1) {
     next[rowIndex]![child] = residual[rowIndex] ?? 0;
@@ -772,7 +882,9 @@ function getChild(
   gamMaxIterations: number,
   gamTolerance: number,
   polynomialDegree: number,
-  ridgePenalty: number
+  ridgePenalty: number,
+  nSplines = 20,
+  psplineLambda = 0.6
 ): { child: number | undefined; independence: number } {
   let bestChild: number | undefined;
   let bestIndependence = 0;
@@ -792,7 +904,9 @@ function getChild(
       gamMaxIterations,
       gamTolerance,
       polynomialDegree,
-      ridgePenalty
+      ridgePenalty,
+      nSplines,
+      psplineLambda
     );
     const parentResiduals = selectColumns(residualized, candidateParents);
     const independence = hsicGammaPValueRows(
@@ -855,7 +969,9 @@ function findParents(
   gamMaxIterations: number,
   gamTolerance: number,
   polynomialDegree: number,
-  ridgePenalty: number
+  ridgePenalty: number,
+  nSplines = 20,
+  psplineLambda = 0.6
 ): Set<number>[] {
   const variableCount = rows[0]?.length ?? 0;
   const parents = Array.from({ length: variableCount }, () => new Set<number>());
@@ -883,7 +999,9 @@ function findParents(
         gamMaxIterations,
         gamTolerance,
         polynomialDegree,
-        ridgePenalty
+        ridgePenalty,
+        nSplines,
+        psplineLambda
       );
 
       if (child === undefined || independence <= alpha) {
@@ -909,7 +1027,9 @@ function findParents(
         gamMaxIterations,
         gamTolerance,
         polynomialDegree,
-        ridgePenalty
+        ridgePenalty,
+        nSplines,
+        psplineLambda
       );
     }
 
@@ -937,7 +1057,9 @@ function findParents(
         gamMaxIterations,
         gamTolerance,
         polynomialDegree,
-        ridgePenalty
+        ridgePenalty,
+        nSplines,
+        psplineLambda
       );
       const residualParent = fitAdditiveResidual(
         rows,
@@ -948,7 +1070,9 @@ function findParents(
         gamMaxIterations,
         gamTolerance,
         polynomialDegree,
-        ridgePenalty
+        ridgePenalty,
+        nSplines,
+        psplineLambda
       );
 
       if (hsicGammaPValue(residualChild, residualParent, bwMethod) > alpha) {
@@ -976,6 +1100,8 @@ export function camuv(options: CamuvOptions): CamuvResult {
   const gamTolerance = options.gamTolerance ?? 1e-5;
   const polynomialDegree = options.polynomialDegree ?? 3;
   const ridgePenalty = options.ridgePenalty ?? 1e-6;
+  const nSplines = options.nSplines ?? 20;
+  const psplineLambda = options.psplineLambda ?? 0.6;
   const nodeLabels = createNodeLabels(variableCount, options.nodeLabels);
 
   const neighborhoods = getNeighborhoods(rows, alpha, bwMethod);
@@ -990,7 +1116,9 @@ export function camuv(options: CamuvOptions): CamuvResult {
     gamMaxIterations,
     gamTolerance,
     polynomialDegree,
-    ridgePenalty
+    ridgePenalty,
+    nSplines,
+    psplineLambda
   );
 
   const confoundedPairs: number[][] = [];
@@ -1012,7 +1140,9 @@ export function camuv(options: CamuvOptions): CamuvResult {
         gamMaxIterations,
         gamTolerance,
         polynomialDegree,
-        ridgePenalty
+        ridgePenalty,
+        nSplines,
+        psplineLambda
       );
       const rightResidual = fitAdditiveResidual(
         rows,
@@ -1023,7 +1153,9 @@ export function camuv(options: CamuvOptions): CamuvResult {
         gamMaxIterations,
         gamTolerance,
         polynomialDegree,
-        ridgePenalty
+        ridgePenalty,
+        nSplines,
+        psplineLambda
       );
       if (hsicGammaPValue(leftResidual, rightResidual, bwMethod) < alpha) {
         confoundedPairs.push([left, right]);

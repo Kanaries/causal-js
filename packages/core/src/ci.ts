@@ -1,4 +1,11 @@
 import { CausalGraph } from "./graph";
+import {
+  KciConditionalTest,
+  KciUnconditionalTest,
+  type KernelName,
+  type KernelWidthEstimation
+} from "./kernel-independence";
+import { iterativeMax } from "./math-utils";
 import type { NumericMatrix, ConditionalIndependenceTest } from "./stats";
 
 function mean(values: readonly number[]): number {
@@ -263,7 +270,7 @@ function encodeDiscreteData(data: NumericMatrix): { encoded: number[][]; cardina
   return {
     encoded: encodedColumns,
     cardinalities: encodedColumns.map((column) => {
-      const max = Math.max(...column);
+      const max = iterativeMax(column);
       return max + 1;
     })
   };
@@ -637,5 +644,181 @@ export class DSeparationTest implements ConditionalIndependenceTest {
     }
 
     return false;
+  }
+}
+
+export interface KciTestOptions {
+  kernelX?: KernelName;
+  kernelY?: KernelName;
+  kernelZ?: KernelName;
+  nullSampleSize?: number;
+  approx?: boolean;
+  estWidth?: KernelWidthEstimation;
+  polynomialDegree?: number;
+  kernelWidthX?: number;
+  kernelWidthY?: number;
+  kernelWidthZ?: number;
+  randomSeed?: number;
+}
+
+/**
+ * Kernel-based conditional independence test in the shared CI-test shape:
+ * an empty conditioning set runs the unconditional KCI (KCI_UInd parity),
+ * a non-empty set runs the conditional KCI (KCI_CInd parity). Mirrors
+ * causal-learn's cit.KCI wrapper. Options are exposed for reconstruction on
+ * resampled data (stabilityAnalysis) and worker serialization.
+ */
+export class KciTest implements ConditionalIndependenceTest {
+  readonly name = "kci";
+  readonly options: KciTestOptions;
+
+  private readonly columns: number[][];
+  private readonly unconditional: KciUnconditionalTest;
+  private readonly conditional: KciConditionalTest;
+  private readonly cache = new Map<string, number>();
+
+  constructor(data: NumericMatrix, options: KciTestOptions = {}) {
+    this.options = { ...options };
+    this.columns = Array.from({ length: data.columns }, (_, index) => [...data.column(index)]);
+    for (const [columnIndex, column] of this.columns.entries()) {
+      if (column.some((value) => Number.isNaN(value))) {
+        throw new Error(`KciTest data contains NaN in column ${columnIndex}.`);
+      }
+    }
+    this.unconditional = new KciUnconditionalTest({
+      ...(options.kernelX !== undefined ? { kernelX: options.kernelX } : {}),
+      ...(options.kernelY !== undefined ? { kernelY: options.kernelY } : {}),
+      ...(options.nullSampleSize !== undefined ? { nullSampleSize: options.nullSampleSize } : {}),
+      ...(options.approx !== undefined ? { approx: options.approx } : {}),
+      ...(options.estWidth !== undefined ? { estWidth: options.estWidth } : {}),
+      ...(options.polynomialDegree !== undefined
+        ? { polynomialDegree: options.polynomialDegree }
+        : {}),
+      ...(options.kernelWidthX !== undefined ? { kernelWidthX: options.kernelWidthX } : {}),
+      ...(options.kernelWidthY !== undefined ? { kernelWidthY: options.kernelWidthY } : {})
+    });
+    this.conditional = new KciConditionalTest({
+      ...(options.kernelX !== undefined ? { kernelX: options.kernelX } : {}),
+      ...(options.kernelY !== undefined ? { kernelY: options.kernelY } : {}),
+      ...(options.kernelZ !== undefined ? { kernelZ: options.kernelZ } : {}),
+      ...(options.nullSampleSize !== undefined ? { nullSampleSize: options.nullSampleSize } : {}),
+      ...(options.approx !== undefined ? { approx: options.approx } : {}),
+      ...(options.estWidth !== undefined ? { estWidth: options.estWidth } : {}),
+      ...(options.polynomialDegree !== undefined
+        ? { polynomialDegree: options.polynomialDegree }
+        : {}),
+      ...(options.kernelWidthX !== undefined ? { kernelWidthX: options.kernelWidthX } : {}),
+      ...(options.kernelWidthY !== undefined ? { kernelWidthY: options.kernelWidthY } : {}),
+      ...(options.kernelWidthZ !== undefined ? { kernelWidthZ: options.kernelWidthZ } : {}),
+      ...(options.randomSeed !== undefined ? { randomSeed: options.randomSeed } : {})
+    });
+  }
+
+  test(x: number, y: number, conditioningSet?: readonly number[]): number {
+    const normalizedConditioningSet = formatConditioningSet(conditioningSet);
+    if (normalizedConditioningSet.includes(x) || normalizedConditioningSet.includes(y)) {
+      throw new Error("Conditioning set cannot contain the tested variables.");
+    }
+
+    const key = `${Math.min(x, y)}:${Math.max(x, y)}|${normalizedConditioningSet.join(",")}`;
+    const cached = this.cache.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const columnX = this.columns[x];
+    const columnY = this.columns[y];
+    if (columnX === undefined || columnY === undefined) {
+      throw new Error(`KciTest column index out of range: ${x}, ${y}`);
+    }
+
+    let pValue: number;
+    if (normalizedConditioningSet.length === 0) {
+      pValue = this.unconditional.computePValue(columnX, columnY).pValue;
+    } else {
+      const rowsZ = columnX.map((_, rowIndex) =>
+        normalizedConditioningSet.map((columnIndex) => {
+          const column = this.columns[columnIndex];
+          if (column === undefined) {
+            throw new Error(`KciTest conditioning column out of range: ${columnIndex}`);
+          }
+          return column[rowIndex]!;
+        })
+      );
+      pValue = this.conditional.computePValue(columnX, columnY, rowsZ).pValue;
+    }
+
+    this.cache.set(key, pValue);
+    return pValue;
+  }
+}
+
+/**
+ * Fisher-Z conditional independence test with test-wise deletion for data
+ * containing missing values (NaN). Port of causal-learn's MV_FisherZ: each
+ * call keeps only the rows where every involved variable ([x, y, ...S]) is
+ * non-NaN, computes the correlation on that submatrix, and uses the effective
+ * sample size in the Fisher-Z transform.
+ */
+export class MvFisherZTest implements ConditionalIndependenceTest {
+  readonly name = "mv_fisherz";
+
+  private readonly columns: number[][];
+  private readonly cache = new Map<string, number>();
+
+  constructor(data: NumericMatrix) {
+    this.columns = Array.from({ length: data.columns }, (_, index) => [...data.column(index)]);
+  }
+
+  test(x: number, y: number, conditioningSet?: readonly number[]): number {
+    const normalizedConditioningSet = formatConditioningSet(conditioningSet);
+    if (normalizedConditioningSet.includes(x) || normalizedConditioningSet.includes(y)) {
+      throw new Error("Conditioning set cannot contain the tested variables.");
+    }
+
+    const key = `${Math.min(x, y)}:${Math.max(x, y)}|${normalizedConditioningSet.join(",")}`;
+    const cached = this.cache.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const variableIndices = [x, y, ...normalizedConditioningSet];
+    const involvedColumns = variableIndices.map((index) => {
+      const column = this.columns[index];
+      if (column === undefined) {
+        throw new Error(`MvFisherZTest column index out of range: ${index}`);
+      }
+      return column;
+    });
+
+    const rowCount = involvedColumns[0]?.length ?? 0;
+    const keptRows: number[] = [];
+    for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+      if (involvedColumns.every((column) => !Number.isNaN(column[rowIndex]!))) {
+        keptRows.push(rowIndex);
+      }
+    }
+
+    if (keptRows.length === 0) {
+      throw new Error(
+        "A test-wise deletion fisher-z test appears no overlapping data of involved variables. Please check the input data."
+      );
+    }
+
+    const deletedColumns = involvedColumns.map((column) => keptRows.map((rowIndex) => column[rowIndex]!));
+    const correlationMatrix = deletedColumns.map((left) =>
+      deletedColumns.map((right) => correlation(left, right))
+    );
+    const inverse = invertMatrix(correlationMatrix);
+    const rawR = -inverse[0]![1]! / Math.sqrt(Math.abs(inverse[0]![0]! * inverse[1]![1]!));
+    const r = Math.abs(rawR) >= 1 ? Math.sign(rawR) * (1 - Number.EPSILON) : rawR;
+    const z = 0.5 * Math.log((1 + r) / (1 - r));
+    const statistic =
+      Math.sqrt(keptRows.length - normalizedConditioningSet.length - 3) * Math.abs(z);
+    const pValue = 2 * (1 - normalCdf(Math.abs(statistic)));
+
+    const clamped = Math.max(0, Math.min(1, pValue));
+    this.cache.set(key, clamped);
+    return clamped;
   }
 }

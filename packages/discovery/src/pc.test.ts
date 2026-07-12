@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { BackgroundKnowledge, ChiSquareTest, DenseMatrix, FisherZTest } from "@causal-js/core";
+import { BackgroundKnowledge, ChiSquareTest, DenseMatrix, FisherZTest, KciTest } from "@causal-js/core";
 
 import { pc, skeletonDiscovery } from "./pc";
+import type { PcResult } from "./contracts";
 
 function buildCommonCauseData(sampleSize: number): DenseMatrix {
   const rows = Array.from({ length: sampleSize }, (_, index) => {
@@ -224,5 +225,42 @@ describe("pc", () => {
       { node1: "X", node2: "Z", endpoint1: "tail", endpoint2: "arrow" },
       { node1: "Y", node2: "Z", endpoint1: "arrow", endpoint2: "tail" }
     ]);
+  });
+});
+
+describe("pc with kernel CI test", () => {
+  it("recovers a nonlinear edge that fisher-z misses", () => {
+    // Chain X1 -> X2 -> X3 with a purely nonlinear first link (X2 = X1^2):
+    // the linear fisher-z test drops X1–X2 entirely, the KCI test keeps the
+    // full skeleton. Verified stable for seeds 1 and 2 at n = 300.
+    const mulberry32 = (seed: number): (() => number) => {
+      let state = (seed >>> 0) || 1;
+      return () => {
+        state |= 0;
+        state = (state + 0x6d2b79f5) | 0;
+        let t = Math.imul(state ^ (state >>> 15), 1 | state);
+        t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    };
+    const random = mulberry32(1);
+    const noise = (): number => random() * 2 - 1;
+    const rows: number[][] = [];
+    for (let index = 0; index < 300; index += 1) {
+      const x = 1.5 * noise();
+      const y = x * x + 0.3 * noise();
+      const z = y + 0.3 * noise();
+      rows.push([x, y, z]);
+    }
+    const data = new DenseMatrix(rows);
+
+    const skeleton = (result: PcResult): string[] =>
+      result.graph.edges.map((edge) => [edge.node1, edge.node2].sort().join("-")).sort();
+
+    const fisherZ = pc({ data, ciTest: new FisherZTest(data) });
+    expect(skeleton(fisherZ)).toEqual(["X2-X3"]);
+
+    const kci = pc({ data, ciTest: new KciTest(data) });
+    expect(skeleton(kci)).toEqual(["X1-X2", "X2-X3"]);
   });
 });

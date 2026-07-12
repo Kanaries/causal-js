@@ -29,6 +29,28 @@ describe("GaussianBicScore", () => {
 
     expect(second).toBe(first);
   });
+
+  it("returns a finite score instead of throwing on collinear data", () => {
+    // Column 2 is an exact copy of column 0: conditional variance of node 2
+    // given parents [0, 1] is exactly 0 and must be clamped, not thrown.
+    const rows = Array.from({ length: 100 }, (_, index) => {
+      const t = index + 1;
+      const x = Math.sin(t / 4) + Math.cos(t / 15);
+      const y = -0.8 * x + Math.cos(t / 7) * 0.05;
+      return [x, y, x];
+    });
+    const score = new GaussianBicScore(new DenseMatrix(rows));
+
+    expect(Number.isFinite(score.score(2, [0, 1]))).toBe(true);
+    expect(Number.isFinite(score.score(2, [0]))).toBe(true);
+  });
+
+  it("returns a finite score for a constant column with no parents", () => {
+    const rows = Array.from({ length: 50 }, (_, index) => [Math.sin(index), 1]);
+    const score = new GaussianBicScore(new DenseMatrix(rows));
+
+    expect(Number.isFinite(score.score(1, []))).toBe(true);
+  });
 });
 
 describe("BDeuScore", () => {

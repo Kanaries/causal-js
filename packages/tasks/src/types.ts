@@ -14,12 +14,14 @@ import type {
   GesOptions,
   GinOptions,
   GraspOptions,
+  MvpcOptions,
   PcOptions,
   RcdOptions
 } from "@causal-js/discovery";
 
 export type DiscoveryAlgorithmId =
   | "pc"
+  | "mvpc"
   | "fci"
   | "ges"
   | "cdnod"
@@ -31,6 +33,7 @@ export type DiscoveryAlgorithmId =
 
 export type DiscoveryOptionsByAlgorithm = {
   pc: PcOptions;
+  mvpc: MvpcOptions;
   fci: FciOptions;
   ges: GesOptions;
   cdnod: CdnodOptions;
@@ -278,9 +281,17 @@ export interface ImpliedConditionalIndependence {
 export interface TestedImplication extends ImpliedConditionalIndependence {
   status: "passed" | "failed" | "inconclusive";
   pValue: number | null;
+  /**
+   * Benjamini-Hochberg adjusted p-value when multipleTestingCorrection is
+   * "benjamini-hochberg"; null when no correction is applied or the
+   * implication is inconclusive.
+   */
+  adjustedPValue: number | null;
   alpha: number | null;
   reason?: string;
 }
+
+export type FalsifyMultipleTestingCorrection = "none" | "benjamini-hochberg";
 
 export interface FalsifyGraphOptions {
   graph: GraphShape;
@@ -288,6 +299,12 @@ export interface FalsifyGraphOptions {
   ciTest?: ConditionalIndependenceTest;
   alpha?: number;
   observedNodeOrder?: readonly string[];
+  /**
+   * Multiple-testing control across the tested implications. "none" (default)
+   * compares raw p-values to alpha; "benjamini-hochberg" controls FDR at
+   * alpha via step-up adjusted p-values.
+   */
+  multipleTestingCorrection?: FalsifyMultipleTestingCorrection;
 }
 
 export interface FalsifyGraphResult extends TaskResultBase {

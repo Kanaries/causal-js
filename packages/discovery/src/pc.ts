@@ -1,4 +1,10 @@
-import { CausalGraph, EDGE_ENDPOINT, GRAPH_KIND, type BackgroundKnowledge } from "@causal-js/core";
+import {
+  CausalGraph,
+  EDGE_ENDPOINT,
+  GRAPH_KIND,
+  iterativeMax,
+  type BackgroundKnowledge
+} from "@causal-js/core";
 
 import type { PcOptions, PcResult, PcSkeletonResult, SeparationSetEntry } from "./contracts";
 import { finalizeGraphShape } from "./graph-result";
@@ -284,7 +290,9 @@ function orientUcSepset(
     const conditioningSets = buildConditioningSetCandidates(graph, x, z).filter((conditioningSet) =>
       priority === 3 ? conditioningSet.includes(y) : !conditioningSet.includes(y)
     );
-    const score = Math.max(...conditioningSets.map((conditioningSet) => ciTest.test(x, z, conditioningSet)));
+    const score = iterativeMax(
+      conditioningSets.map((conditioningSet) => ciTest.test(x, z, conditioningSet))
+    );
     rankedColliders.push({
       triple: [x, y, z],
       score
@@ -323,9 +331,11 @@ function orientMaxP(
     const conditioningSets = buildConditioningSetCandidates(graph, x, z);
     const condWithY = conditioningSets.filter((conditioningSet) => conditioningSet.includes(y));
     const condWithoutY = conditioningSets.filter((conditioningSet) => !conditioningSet.includes(y));
-    const maxPContainY = Math.max(...condWithY.map((conditioningSet) => ciTest.test(x, z, conditioningSet)));
-    const maxPNotContainY = Math.max(
-      ...condWithoutY.map((conditioningSet) => ciTest.test(x, z, conditioningSet))
+    const maxPContainY = iterativeMax(
+      condWithY.map((conditioningSet) => ciTest.test(x, z, conditioningSet))
+    );
+    const maxPNotContainY = iterativeMax(
+      condWithoutY.map((conditioningSet) => ciTest.test(x, z, conditioningSet))
     );
 
     if (maxPNotContainY <= maxPContainY) {

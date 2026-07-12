@@ -39,8 +39,9 @@ console.log(result.failedImplications);
 ## Current Limits
 
 - no permutation-based falsification benchmark yet
-- no multiple-testing correction yet
+- multiple-testing control is opt-in: pass `multipleTestingCorrection: "benjamini-hochberg"` for FDR control; the default compares raw p-values to alpha
 - no PAG, MAG, or ADMG graph falsification support
+- only local Markov implications are tested (each node vs its non-descendants given its parents); the full set of d-separation-implied conditional independences is not enumerated, so two Markov-equivalent graphs are indistinguishable and a non-local violation can go untested
 
 ## When Not To Use This API
 

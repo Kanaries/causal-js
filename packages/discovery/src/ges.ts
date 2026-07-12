@@ -37,17 +37,6 @@ function getUndirectedNeighborIndices(graph: CausalGraph, nodeIndex: number): nu
     .filter((candidateIndex) => graph.isUndirectedFromTo(nodeId, graph.getNodeIdAt(candidateIndex)));
 }
 
-function getAdjacentIndices(graph: CausalGraph, nodeIndex: number): number[] {
-  return graph.neighbors(nodeIndex);
-}
-
-function getChildIndices(graph: CausalGraph, nodeIndex: number): number[] {
-  return graph
-    .getChildIds(graph.getNodeIdAt(nodeIndex))
-    .map((nodeId) => graph.getNodeIndex(nodeId))
-    .sort((left, right) => left - right);
-}
-
 function getCpdagParentIndices(graph: CausalGraph, nodeIndex: number): number[] {
   return graph
     .getParentIds(graph.getNodeIdAt(nodeIndex))
@@ -153,15 +142,6 @@ function canInsertEdge(
   return !hasSemiDirectedPathAvoiding(cpdag, toIndex, fromIndex, new Set(conditionNodes));
 }
 
-function canAddEdge(
-  cpdag: CausalGraph,
-  fromIndex: number,
-  toIndex: number,
-  subset: readonly number[]
-): boolean {
-  return canInsertEdge(cpdag, fromIndex, toIndex, subset);
-}
-
 function scoreDeltaForAdd(
   cpdag: CausalGraph,
   from: number,
@@ -264,7 +244,8 @@ export function ges(options: GesOptions): GesResult {
   let currentScore = totalScore(CausalGraph.fromShape(pdagToDag(cpdag).toShape()), variableCount, options.score);
   let forwardSteps = 0;
   let backwardSteps = 0;
-  let reverseSteps = 0;
+  // GES has no turning phase (matching causal-learn); reverseSteps stays 0.
+  const reverseSteps = 0;
 
   while (true) {
     let bestDelta = 0;
@@ -285,7 +266,7 @@ export function ges(options: GesOptions): GesResult {
         );
 
         for (const subset of enumerateSubsets(t0)) {
-          if (!canAddEdge(cpdag, from, to, subset)) {
+          if (!canInsertEdge(cpdag, from, to, subset)) {
             continue;
           }
 

@@ -448,8 +448,15 @@ export class GraphIR {
       this.nodeIndexById.set(this.nodes[nodeIndex]!.id, nodeIndex);
     }
 
+    // Exact endpoint comparison: substring matching would cross-delete when
+    // node ids overlap as suffixes/prefixes (e.g. removing "B" hitting
+    // "AB::C"). Node ids containing "::" are ambiguous in canonicalEdgeKey
+    // itself (pre-existing limitation).
     for (const key of [...this.edgeMetadata.keys()]) {
-      if (key.includes(`${nodeId}::`) || key.endsWith(`::${nodeId}`)) {
+      const separatorIndex = key.indexOf("::");
+      const left = key.slice(0, separatorIndex);
+      const right = key.slice(separatorIndex + 2);
+      if (left === nodeId || right === nodeId) {
         this.edgeMetadata.delete(key);
       }
     }

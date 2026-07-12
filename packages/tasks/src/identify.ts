@@ -9,9 +9,16 @@ export function identifyEffect(options: IdentifyEffectOptions): IdentifyEffectRe
   assertSingletonNodeQuery(options.treatment, options.outcome);
   assertDagLike(graph);
 
+  // assertDagLike accepted the graph, so a "generic" kind is structurally a
+  // DAG here; normalize it so backend resolution (registered for kind "dag")
+  // matches — user-built {nodes, edges} shapes default to kind "generic".
+  const graphShape = graph.toShape();
+  const backendGraphShape =
+    graphShape.kind === GRAPH_KIND.dag ? graphShape : { ...graphShape, kind: GRAPH_KIND.dag };
+
   const backendRun = runIdentificationBackend(
     {
-      graph: graph.toShape(),
+      graph: backendGraphShape,
       treatment: options.treatment,
       outcome: options.outcome,
       ...(options.maxAdjustmentSets === undefined ? {} : { maxAdjustmentSets: options.maxAdjustmentSets })
