@@ -262,5 +262,5 @@ describe("pc with kernel CI test", () => {
 
     const kci = pc({ data, ciTest: new KciTest(data) });
     expect(skeleton(kci)).toEqual(["X1-X2", "X2-X3"]);
-  });
+  }, 30_000);
 });

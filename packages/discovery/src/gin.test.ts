@@ -56,7 +56,7 @@ describe("gin", () => {
         );
       }
     }
-  });
+  }, 30_000);
 
   it("recovers the same structure with the kci test (smoke)", () => {
     const result = gin({

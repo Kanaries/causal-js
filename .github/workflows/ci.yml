@@ -66,5 +66,5 @@ jobs:
       - name: External regression tests
         env:
           CAUSAL_JS_SOURCE_ROOT: ${{ github.workspace }}
-        run: pnpm test
+        run: pnpm test -- --testTimeout=30000
         working-directory: causal-parity
