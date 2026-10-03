@@ -70,124 +70,61 @@ function logGamma(value: number): number {
   return 0.5 * Math.log(2 * Math.PI) + (shifted + 0.5) * Math.log(t) - t + Math.log(sum);
 }
 
-function invertMatrix(matrix: readonly (readonly number[])[]): number[][] {
-  const size = matrix.length;
-  const augmented = matrix.map((row, rowIndex) => {
-    if (row.length !== size) {
-      throw new Error("Matrix inversion requires a square matrix.");
+/** Project a standardized target onto a parent correlation matrix. Rank-deficient
+ * directions (duplicate/constant parents) are skipped rather than regularized
+ * in the original units. This is a Cholesky/Gram-Schmidt projection. */
+function explainedVariance(correlation: number[][], node: number, parents: readonly number[]): number {
+  const factors = parents.map(() => new Array<number>(parents.length).fill(0));
+  const projections = new Array<number>(parents.length).fill(0);
+  let explained = 0;
+  for (let i = 0; i < parents.length; i += 1) {
+    const parent = parents[i]!;
+    let remaining = correlation[parent]![parent]!;
+    let target = correlation[node]![parent]!;
+    for (let j = 0; j < i; j += 1) {
+      remaining -= factors[i]![j]! ** 2;
+      target -= factors[i]![j]! * projections[j]!;
     }
-
-    return [
-      ...row,
-      ...Array.from({ length: size }, (_, columnIndex) => (rowIndex === columnIndex ? 1 : 0))
-    ];
-  });
-
-  for (let pivotIndex = 0; pivotIndex < size; pivotIndex += 1) {
-    let pivotRow = pivotIndex;
-    let pivotValue = Math.abs(augmented[pivotRow]?.[pivotIndex] ?? 0);
-
-    for (let candidate = pivotIndex + 1; candidate < size; candidate += 1) {
-      const candidateValue = Math.abs(augmented[candidate]?.[pivotIndex] ?? 0);
-      if (candidateValue > pivotValue) {
-        pivotRow = candidate;
-        pivotValue = candidateValue;
+    if (remaining <= 1e-12) {
+      continue;
+    }
+    const norm = Math.sqrt(remaining);
+    projections[i] = target / norm;
+    explained += projections[i]! ** 2;
+    for (let k = i + 1; k < parents.length; k += 1) {
+      let value = correlation[parents[k]!]![parent]!;
+      for (let j = 0; j < i; j += 1) {
+        value -= factors[k]![j]! * factors[i]![j]!;
       }
-    }
-
-    if (pivotValue === 0) {
-      throw new Error("Matrix is singular.");
-    }
-
-    if (pivotRow !== pivotIndex) {
-      const current = augmented[pivotIndex];
-      const selected = augmented[pivotRow];
-      if (!current || !selected) {
-        throw new Error("Invalid pivot row.");
-      }
-      augmented[pivotIndex] = selected;
-      augmented[pivotRow] = current;
-    }
-
-    const pivot = augmented[pivotIndex]?.[pivotIndex];
-    if (pivot === undefined) {
-      throw new Error("Missing pivot.");
-    }
-
-    for (let columnIndex = 0; columnIndex < 2 * size; columnIndex += 1) {
-      augmented[pivotIndex]![columnIndex]! /= pivot;
-    }
-
-    for (let rowIndex = 0; rowIndex < size; rowIndex += 1) {
-      if (rowIndex === pivotIndex) {
-        continue;
-      }
-
-      const factor = augmented[rowIndex]?.[pivotIndex];
-      if (factor === undefined) {
-        throw new Error("Missing elimination factor.");
-      }
-
-      for (let columnIndex = 0; columnIndex < 2 * size; columnIndex += 1) {
-        augmented[rowIndex]![columnIndex]! -= factor * augmented[pivotIndex]![columnIndex]!;
-      }
+      factors[k]![i] = value / norm;
     }
   }
-
-  return augmented.map((row) => row.slice(size));
-}
-
-/**
- * Inverts a parent covariance submatrix. The regular path is plain
- * Gauss-Jordan (identical results to before); only when the matrix is exactly
- * singular (e.g. duplicated columns in the data) does it retry with a tiny
- * ridge on the diagonal so score-based searches survive degenerate data.
- */
-function invertParentCovariance(matrix: readonly (readonly number[])[]): number[][] {
-  try {
-    return invertMatrix(matrix);
-  } catch {
-    const ridge = 1e-10;
-    const regularized = matrix.map((row, rowIndex) =>
-      row.map((value, columnIndex) => (rowIndex === columnIndex ? value + ridge : value))
-    );
-    return invertMatrix(regularized);
-  }
-}
-
-function selectSubmatrix(matrix: readonly (readonly number[])[], indices: readonly number[]): number[][] {
-  return indices.map((rowIndex) => {
-    const row = matrix[rowIndex];
-    if (!row) {
-      throw new Error(`Missing row ${rowIndex}`);
-    }
-
-    return indices.map((columnIndex) => {
-      const value = row[columnIndex];
-      if (value === undefined) {
-        throw new Error(`Missing matrix value at row ${rowIndex}, column ${columnIndex}`);
-      }
-      return value;
-    });
-  });
+  return explained;
 }
 
 export class GaussianBicScore implements LocalScoreFunction {
-  /** Lower bound applied to (conditional) variances so collinear or constant
-   * columns produce a large-but-finite log-likelihood instead of crashing. */
-  private static readonly MIN_VARIANCE = 1e-10;
-
+  // Relative residual-variance floor. Only the undefined likelihood of an
+  // exactly constant target uses an absolute convention (independent of parents).
+  private static readonly MIN_VARIANCE_RATIO = 1e-10;
   readonly name = "local_score_BIC";
 
   private readonly penaltyDiscount: number;
   private readonly sampleSize: number;
-  private readonly covariance: number[][];
+  private readonly variances: number[];
+  private readonly correlation: number[][];
   private readonly cache = new Map<string, number>();
 
   constructor(data: NumericMatrix, options: GaussianBicScoreOptions = {}) {
     this.penaltyDiscount = options.penaltyDiscount ?? 2;
     this.sampleSize = data.rows;
-    this.covariance = covarianceMatrix(data);
+    const covariance = covarianceMatrix(data);
+    this.variances = covariance.map((row, i) => row[i]!);
+    this.correlation = covariance.map((row, i) => row.map((value, j) => {
+      if (this.variances[i] === 0 || this.variances[j] === 0) {
+        return 0;
+      }
+      return i === j ? 1 : value / Math.sqrt(this.variances[i]!) / Math.sqrt(this.variances[j]!);
+    }));
   }
 
   score(node: number, parents: readonly number[]): number {
@@ -197,56 +134,19 @@ export class GaussianBicScore implements LocalScoreFunction {
     if (cached !== undefined) {
       return cached;
     }
-
-    let scoreValue: number;
-
-    if (sortedParents.length === 0) {
-      const rawVariance = this.covariance[node]?.[node];
-      if (rawVariance === undefined) {
-        throw new Error(`Invalid variance for node ${node}`);
-      }
-      // Clamp instead of throwing: constant or collinear columns yield a
-      // degenerate variance; a large negative log-likelihood keeps search
-      // algorithms (GES, GRaSP, exact search) running on such data.
-      const variance = Math.max(rawVariance, GaussianBicScore.MIN_VARIANCE);
-      scoreValue = this.sampleSize * Math.log(variance);
-    } else {
-      const yx = selectSubmatrix(this.covariance, [node, ...sortedParents])[0]?.slice(1);
-      const xx = selectSubmatrix(this.covariance, sortedParents);
-      if (!yx) {
-        throw new Error(`Unable to build covariance row for node ${node}`);
-      }
-
-      const xxInverse = invertParentCovariance(xx);
-      let quadratic = 0;
-      for (let rowIndex = 0; rowIndex < yx.length; rowIndex += 1) {
-        const rowValue = yx[rowIndex];
-        if (rowValue === undefined) {
-          throw new Error(`Missing covariance row value at index ${rowIndex}`);
-        }
-
-        let inner = 0;
-        for (let columnIndex = 0; columnIndex < yx.length; columnIndex += 1) {
-          const columnValue = yx[columnIndex];
-          const inverseValue = xxInverse[rowIndex]?.[columnIndex];
-          if (columnValue === undefined || inverseValue === undefined) {
-            throw new Error(`Missing covariance inverse value at ${rowIndex}, ${columnIndex}`);
-          }
-          inner += inverseValue * columnValue;
-        }
-        quadratic += rowValue * inner;
-      }
-
-      const variance = Math.max(
-        (this.covariance[node]?.[node] ?? 0) - quadratic,
-        GaussianBicScore.MIN_VARIANCE
-      );
-
-      scoreValue =
-        this.sampleSize * Math.log(variance) +
-        Math.log(this.sampleSize) * sortedParents.length * this.penaltyDiscount;
+    const variance = this.variances[node];
+    if (variance === undefined || !Number.isFinite(variance) || variance < 0) {
+      throw new Error(`Invalid variance for node ${node}`);
     }
-
+    const residualRatio = variance === 0 ? 1 : Math.max(
+      1 - explainedVariance(this.correlation, node, sortedParents),
+      GaussianBicScore.MIN_VARIANCE_RATIO
+    );
+    // Keep the marginal scale term so ordinary BIC values still match the
+    // reference. Changing units adds the same constant for every parent set.
+    const scoreValue = this.sampleSize * (
+      Math.log(variance === 0 ? 1e-10 : variance) + Math.log(residualRatio)
+    ) + Math.log(this.sampleSize) * sortedParents.length * this.penaltyDiscount;
     this.cache.set(key, scoreValue);
     return scoreValue;
   }

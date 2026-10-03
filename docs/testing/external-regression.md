@@ -29,3 +29,12 @@ causal-js behavior below, not the upstream behavior.
   remaining variables (an upstream indexing bug). causal-js tests the real
   variable columns, matching the GIN paper. GIN parity is therefore
   approximate/cluster-level, never bit-exact against upstream.
+
+- **Gaussian BIC scale handling** (`packages/core/src/score.ts`): residual
+  variance is floored relative to the target variance; parent projections are
+  computed on a correlation matrix, skipping rank-deficient directions. A
+  change of units therefore preserves local score differences. Ordinary
+  nondegenerate fixtures retain their original-scale BIC values. Constant
+  targets use a fixed finite likelihood convention; this is not statistical
+  evidence about a constant variable. Lightweight scale regressions live in
+  `tests/bic-scale.test.ts`; existing external Gaussian baselines are unchanged.
