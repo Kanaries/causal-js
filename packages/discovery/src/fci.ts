@@ -8,6 +8,7 @@ import {
 } from "@causal-js/core";
 
 import type { FciOptions, FciResult, SeparationSetEntry } from "./contracts";
+import { assertValidAlpha, testIndependence } from "./ci-validation";
 import { finalizeGraphShape } from "./graph-result";
 
 type SepsetMap = Map<string, number[]>;
@@ -1226,7 +1227,7 @@ function createCountedCiTest(options: FciOptions): { ciTest: CountedCiTest; getC
     ciTest: {
       test(x, y, conditioningSet) {
         count += 1;
-        return options.ciTest.test(x, y, conditioningSet);
+        return testIndependence(options.ciTest, x, y, conditioningSet);
       }
     },
     getCount: () => count
@@ -1345,6 +1346,7 @@ function annotateEdgeVisibility(graph: CausalGraph): void {
 
 export function fci(options: FciOptions): FciResult {
   const alpha = options.alpha ?? 0.05;
+  assertValidAlpha(alpha);
   const maxPathLength = options.maxPathLength ?? -1;
   const { ciTest, getCount } = createCountedCiTest(options);
   const { graph, sepsets, maxDepth } = skeletonDiscovery(options, ciTest);

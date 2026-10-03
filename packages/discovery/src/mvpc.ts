@@ -8,6 +8,7 @@ import {
 } from "@causal-js/core";
 
 import type { MvpcOptions, MvpcResult, SeparationSetEntry } from "./contracts";
+import { assertValidAlpha, testIndependence } from "./ci-validation";
 import { finalizeGraphShape } from "./graph-result";
 import { orientPcGraph, skeletonDiscovery } from "./pc";
 
@@ -142,12 +143,7 @@ function detectParentsOfIndicator(
         continue;
       }
       for (const conditioningSet of combinations(others, depth)) {
-        let pValue: number;
-        try {
-          pValue = ciTest.test(indicator, y, conditioningSet);
-        } catch {
-          continue;
-        }
+        const pValue = testIndependence(ciTest, indicator, y, conditioningSet);
         if (pValue > alpha) {
           if (stable) {
             pendingRemoval.push(y);
@@ -407,13 +403,8 @@ function skeletonCorrection(
           continue;
         }
         for (const conditioningSet of combinations(neighborIndices, depth)) {
-          let pValue: number;
-          try {
-            pValue = ciTest.test(x, y, conditioningSet);
-            testsRun += 1;
-          } catch {
-            continue;
-          }
+          const pValue = testIndependence(ciTest, x, y, conditioningSet);
+          testsRun += 1;
           if (pValue > alpha) {
             const normalized = [...conditioningSet].sort((left, right) => left - right);
             appendSepsetEntry(sepsets, x, y, normalized);
@@ -469,6 +460,7 @@ function toRows(data: NumericMatrix): number[][] {
 
 export function mvpc(options: MvpcOptions): MvpcResult {
   const alpha = options.alpha ?? 0.05;
+  assertValidAlpha(alpha);
   const stable = options.stable ?? true;
   const correction = options.correction ?? "mvcrtn-fisher-z";
   const rows = toRows(options.data);

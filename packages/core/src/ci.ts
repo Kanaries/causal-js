@@ -8,6 +8,22 @@ import {
 import { iterativeMax } from "./math-utils";
 import type { NumericMatrix, ConditionalIndependenceTest } from "./stats";
 
+function assertFiniteColumns(columns: readonly (readonly number[])[], name: string, allowMissing = false): void {
+  for (const [columnIndex, column] of columns.entries()) {
+    const invalid = column.findIndex(value => !Number.isFinite(value) && !(allowMissing && Number.isNaN(value)));
+    if (invalid !== -1) {
+      throw new Error(`${name} requires finite data; found ${column[invalid]} in column ${columnIndex}, row ${invalid}.`);
+    }
+  }
+}
+
+function checkedFisherPValue(pValue: number): number {
+  if (!Number.isFinite(pValue) || pValue < 0 || pValue > 1) {
+    throw new Error("Fisher-Z produced an invalid p-value; check data variance and numerical conditioning.");
+  }
+  return pValue;
+}
+
 function mean(values: readonly number[]): number {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
@@ -475,6 +491,7 @@ export class FisherZTest implements ConditionalIndependenceTest {
   private readonly cache = new Map<string, number>();
 
   constructor(private readonly data: NumericMatrix) {
+    assertFiniteColumns(Array.from({ length: data.columns }, (_, index) => data.column(index)), "Fisher-Z");
     this.sampleSize = data.rows;
     this.correlationMatrix = buildCorrelationMatrix(data);
   }
@@ -520,7 +537,7 @@ export class FisherZTest implements ConditionalIndependenceTest {
 
     const fisherZ = 0.5 * Math.log((1 + partialCorrelation) / (1 - partialCorrelation));
     const statistic = Math.sqrt(degreesOfFreedom) * Math.abs(fisherZ);
-    const pValue = 2 * (1 - normalCdf(Math.abs(statistic)));
+    const pValue = checkedFisherPValue(2 * (1 - normalCdf(Math.abs(statistic))));
 
     this.cache.set(key, pValue);
     return pValue;
@@ -680,11 +697,7 @@ export class KciTest implements ConditionalIndependenceTest {
   constructor(data: NumericMatrix, options: KciTestOptions = {}) {
     this.options = { ...options };
     this.columns = Array.from({ length: data.columns }, (_, index) => [...data.column(index)]);
-    for (const [columnIndex, column] of this.columns.entries()) {
-      if (column.some((value) => Number.isNaN(value))) {
-        throw new Error(`KciTest data contains NaN in column ${columnIndex}.`);
-      }
-    }
+    assertFiniteColumns(this.columns, "KciTest");
     this.unconditional = new KciUnconditionalTest({
       ...(options.kernelX !== undefined ? { kernelX: options.kernelX } : {}),
       ...(options.kernelY !== undefined ? { kernelY: options.kernelY } : {}),
@@ -768,6 +781,7 @@ export class MvFisherZTest implements ConditionalIndependenceTest {
 
   constructor(data: NumericMatrix) {
     this.columns = Array.from({ length: data.columns }, (_, index) => [...data.column(index)]);
+    assertFiniteColumns(this.columns, "MV-Fisher-Z", true);
   }
 
   test(x: number, y: number, conditioningSet?: readonly number[]): number {
@@ -805,6 +819,11 @@ export class MvFisherZTest implements ConditionalIndependenceTest {
       );
     }
 
+    const degreesOfFreedom = keptRows.length - normalizedConditioningSet.length - 3;
+    if (degreesOfFreedom <= 0) {
+      throw new Error("Effective sample size is too small for MV-Fisher-Z with the requested conditioning set.");
+    }
+
     const deletedColumns = involvedColumns.map((column) => keptRows.map((rowIndex) => column[rowIndex]!));
     const correlationMatrix = deletedColumns.map((left) =>
       deletedColumns.map((right) => correlation(left, right))
@@ -814,8 +833,8 @@ export class MvFisherZTest implements ConditionalIndependenceTest {
     const r = Math.abs(rawR) >= 1 ? Math.sign(rawR) * (1 - Number.EPSILON) : rawR;
     const z = 0.5 * Math.log((1 + r) / (1 - r));
     const statistic =
-      Math.sqrt(keptRows.length - normalizedConditioningSet.length - 3) * Math.abs(z);
-    const pValue = 2 * (1 - normalCdf(Math.abs(statistic)));
+      Math.sqrt(degreesOfFreedom) * Math.abs(z);
+    const pValue = checkedFisherPValue(2 * (1 - normalCdf(Math.abs(statistic))));
 
     const clamped = Math.max(0, Math.min(1, pValue));
     this.cache.set(key, clamped);

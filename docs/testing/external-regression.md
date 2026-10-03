@@ -47,3 +47,13 @@ causal-js behavior below, not the upstream behavior.
   avoids the upstream default's log(0)/NaN boundary. Independent small-count
   Dirichlet checks and GES regressions are in `tests/bdeu-boundaries.test.ts`;
   existing multi-variable external discrete baselines are unchanged.
+
+- **CI failures and sample sizes**: ordinary Fisher-Z and KCI reject
+  non-finite observations. MV-Fisher-Z permits NaN as missing data but rejects
+  Infinity and requires `n_effective > |S| + 3` for each test. PC, MVPC,
+  CD-NOD and FCI reject alpha outside `(0, 1)` and non-finite/out-of-range
+  backend p-values, including orientation-time calls. MVPC propagates failed
+  missingness/correction tests instead of silently treating them as evidence.
+  These failure contracts intentionally differ from permissive upstream
+  behavior; valid-input parity baselines remain unchanged. Regressions are in
+  `tests/ci-failure-contract.test.ts`.

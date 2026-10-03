@@ -7,6 +7,7 @@ import {
 } from "@causal-js/core";
 
 import type { PcOptions, PcResult, PcSkeletonResult, SeparationSetEntry } from "./contracts";
+import { assertValidAlpha, testIndependence } from "./ci-validation";
 import { finalizeGraphShape } from "./graph-result";
 
 function createNodeLabels(variableCount: number, nodeLabels?: readonly string[]): string[] {
@@ -291,7 +292,7 @@ function orientUcSepset(
       priority === 3 ? conditioningSet.includes(y) : !conditioningSet.includes(y)
     );
     const score = iterativeMax(
-      conditioningSets.map((conditioningSet) => ciTest.test(x, z, conditioningSet))
+      conditioningSets.map((conditioningSet) => testIndependence(ciTest, x, z, conditioningSet))
     );
     rankedColliders.push({
       triple: [x, y, z],
@@ -332,10 +333,10 @@ function orientMaxP(
     const condWithY = conditioningSets.filter((conditioningSet) => conditioningSet.includes(y));
     const condWithoutY = conditioningSets.filter((conditioningSet) => !conditioningSet.includes(y));
     const maxPContainY = iterativeMax(
-      condWithY.map((conditioningSet) => ciTest.test(x, z, conditioningSet))
+      condWithY.map((conditioningSet) => testIndependence(ciTest, x, z, conditioningSet))
     );
     const maxPNotContainY = iterativeMax(
-      condWithoutY.map((conditioningSet) => ciTest.test(x, z, conditioningSet))
+      condWithoutY.map((conditioningSet) => testIndependence(ciTest, x, z, conditioningSet))
     );
 
     if (maxPNotContainY <= maxPContainY) {
@@ -480,7 +481,7 @@ function orientDefiniteMaxP(
     let nonUcCandidate = true;
 
     for (const conditioningSet of condWithY) {
-      const pValue = ciTest.test(x, z, conditioningSet);
+      const pValue = testIndependence(ciTest, x, z, conditioningSet);
       if (pValue > alpha) {
         ucCandidate = false;
         break;
@@ -491,7 +492,7 @@ function orientDefiniteMaxP(
     }
 
     for (const conditioningSet of condWithoutY) {
-      const pValue = ciTest.test(x, z, conditioningSet);
+      const pValue = testIndependence(ciTest, x, z, conditioningSet);
       if (pValue > alpha) {
         nonUcCandidate = false;
         if (!ucCandidate) {
@@ -635,6 +636,7 @@ export function orientPcGraph(
   options: Pick<PcOptions, "alpha" | "backgroundKnowledge" | "ciTest" | "ucPriority" | "ucRule">,
   sepsets: SeparationSetEntry[]
 ): CausalGraph {
+  assertValidAlpha(options.alpha ?? 0.05);
   const ucRule = options.ucRule ?? 0;
   const priority = resolveUcPriority(ucRule, options.ucPriority);
 
@@ -737,6 +739,7 @@ export function meekOrient(
 
 export function skeletonDiscovery(options: PcOptions): PcSkeletonResult {
   const alpha = options.alpha ?? 0.05;
+  assertValidAlpha(alpha);
   const stable = options.stable ?? true;
   const variableCount = options.data.columns;
   const nodeLabels = createNodeLabels(variableCount, options.nodeLabels);
@@ -778,7 +781,7 @@ export function skeletonDiscovery(options: PcOptions): PcSkeletonResult {
 
         for (const conditioningSet of combinations(candidateNeighbors, depth)) {
           testsRun += 1;
-          const pValue = options.ciTest.test(x, y, conditioningSet);
+          const pValue = testIndependence(options.ciTest, x, y, conditioningSet);
           if (pValue <= alpha) {
             continue;
           }
