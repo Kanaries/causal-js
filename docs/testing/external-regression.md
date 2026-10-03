@@ -38,3 +38,12 @@ causal-js behavior below, not the upstream behavior.
   targets use a fixed finite likelihood convention; this is not statistical
   evidence about a constant variable. Lightweight scale regressions live in
   `tests/bic-scale.test.ts`; existing external Gaussian baselines are unchanged.
+
+- **BDeu small-graph priors** (`packages/core/src/score.ts`): the default
+  expected parent count remains 1 for three or more variables, becomes 0.5
+  for two variables, and is 0 for a singleton. Explicit non-singleton priors
+  must lie strictly between 0 and `d-1`; a singleton accepts only 0. The
+  equivalent sample size must be finite and positive. This intentionally
+  avoids the upstream default's log(0)/NaN boundary. Independent small-count
+  Dirichlet checks and GES regressions are in `tests/bdeu-boundaries.test.ts`;
+  existing multi-variable external discrete baselines are unchanged.

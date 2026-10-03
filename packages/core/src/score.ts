@@ -6,6 +6,8 @@ export interface GaussianBicScoreOptions {
 
 export interface BDeuScoreOptions {
   samplePrior?: number;
+  /** Expected parent count: strictly between 0 and d-1, or 0 for d=1.
+   * Defaults to 1 for d>=3, 0.5 for d=2, and 0 for d=1. */
   structurePrior?: number;
   stateCardinalities?: Record<number, number>;
 }
@@ -164,8 +166,18 @@ export class BDeuScore implements LocalScoreFunction {
 
   constructor(data: NumericMatrix, options: BDeuScoreOptions = {}) {
     this.samplePrior = options.samplePrior ?? 1;
-    this.structurePrior = options.structurePrior ?? 1;
     this.variableCount = data.columns;
+    const possibleParents = this.variableCount - 1;
+    this.structurePrior = options.structurePrior ?? Math.min(1, possibleParents / 2);
+    if (!Number.isFinite(this.samplePrior) || this.samplePrior <= 0) {
+      throw new Error("BDeu samplePrior must be finite and positive.");
+    }
+    const edgeProbability = this.structurePrior / possibleParents;
+    if (!Number.isFinite(this.structurePrior) || (possibleParents === 0
+      ? this.structurePrior !== 0
+      : !(edgeProbability > 0 && edgeProbability < 1))) {
+      throw new Error("BDeu structurePrior must be between 0 and the number of possible parents (exclusive), or 0 for one variable.");
+    }
     this.rows = data.toArray();
     this.stateCardinalities =
       options.stateCardinalities ??
@@ -219,9 +231,13 @@ export class BDeuScore implements LocalScoreFunction {
 
     let scoreValue = 0;
     const vm = this.variableCount - 1;
-    scoreValue +=
-      sortedParents.length * Math.log(this.structurePrior / vm) +
-      (vm - sortedParents.length) * Math.log(1 - this.structurePrior / vm);
+    // There are no possible edges in a singleton graph. For larger graphs,
+    // constructor validation keeps the Bernoulli prior away from log(0).
+    if (vm > 0) {
+      scoreValue +=
+        sortedParents.length * Math.log(this.structurePrior / vm) +
+        (vm - sortedParents.length) * Math.log1p(-this.structurePrior / vm);
+    }
 
     for (const { total, childCounts } of parentCounts.values()) {
       const firstTerm =
