@@ -88,6 +88,8 @@ console.log(stability.edgeFrequency);
 - falsification and stability now reject invalid input contracts such as duplicate observed-node mappings or out-of-range bootstrap thresholds
 
 See [result-contract.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/result-contract.md) for the stable field-level result contract.
+For method introspection, structured diagnostics, and configuration-level
+evidence, see the [Agent contract](agent-contract.md).
 
 Discovery outputs are mostly CPDAGs while the tasks accept only DAGs; see
 [discovery-to-tasks.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/discovery-to-tasks.md)

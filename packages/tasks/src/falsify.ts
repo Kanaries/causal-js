@@ -1,5 +1,6 @@
-import { GRAPH_KIND } from "@causal-js/core";
+import { GRAPH_KIND, type ConditionalIndependenceTest } from "@causal-js/core";
 
+import { ciImplementation, createTaskAgent, graphConfiguration } from "./agent-result";
 import {
   asCausalGraph,
   assertNonEmptyMatrix,
@@ -15,6 +16,56 @@ import type {
   ImpliedConditionalIndependence,
   TestedImplication
 } from "./types";
+
+function withFalsificationAgent(
+  options: FalsifyGraphOptions,
+  result: Omit<FalsifyGraphResult, "agent">,
+  ciTest?: ConditionalIndependenceTest
+): FalsifyGraphResult {
+  const { overallSummary: counts } = result;
+  const statisticalStatus = !result.graphValidity.dagSupported ? "not_applicable"
+    : !options.data ? "not_run"
+      : result.testedImplications.length === 0 ? "not_applicable"
+        : counts.failedCount > 0 ? "failed"
+          : counts.inconclusiveCount > 0 ? "inconclusive" : "passed";
+  const graph = asCausalGraph(result.graph);
+  const observed = new Set(
+    result.graphValidity.dagSupported && options.data && options.observedNodeOrder
+      ? options.observedNodeOrder
+      : getMeasuredNodeIds(graph)
+  );
+  const skippedUnobservedParents = [...observed].some((nodeId) =>
+    graph.getParentIds(nodeId).some((parentId) => !observed.has(parentId))
+  );
+  return {
+    ...result,
+    agent: createTaskAgent("falsifyGraph", {
+      ...graphConfiguration(result.graph),
+      graphKind: result.graphKind,
+      dagSupported: result.graphValidity.dagSupported,
+      hasData: options.data !== undefined,
+      ciTest: ciImplementation(ciTest),
+      alpha: options.alpha ?? 0.05,
+      multipleTestingCorrection: options.multipleTestingCorrection ?? "none",
+      observedNodeOrder: options.observedNodeOrder ? "explicit" : "graph-order",
+      dataRows: options.data?.rows ?? null,
+      dataColumns: options.data?.columns ?? null
+    }, ["graphValidity", "testedImplications", "overallSummary"], {
+      backend: "typescript-local-markov",
+      diagnostics: [
+        { code: "graph_validity", status: result.graphValidity.valid ? "passed" : "failed", severity: result.graphValidity.valid ? "info" : "error", message: result.graphValidity.valid ? "Graph IR structural checks passed." : "Graph IR structural checks found issues.", details: { issueCount: result.graphValidity.issues.length } },
+        { code: "falsification_graph_supported", status: result.graphValidity.dagSupported ? "passed" : "not_applicable", severity: result.graphValidity.dagSupported ? "info" : "warning", message: result.graphValidity.dagSupported ? "The graph is directed and acyclic." : "Statistical falsification is unsupported for this graph structure." },
+        { code: "statistical_falsification", status: statisticalStatus, severity: statisticalStatus === "passed" ? "info" : "warning", message: statisticalStatus === "not_run" ? "No data were supplied; no statistical implication was tested." : statisticalStatus === "not_applicable" ? "No applicable statistical implications were tested." : statisticalStatus === "failed" ? "At least one tested implication was rejected." : statisticalStatus === "inconclusive" ? "One or more implication tests could not produce a valid p-value." : "All tested implications survived the chosen rejection rule; this does not confirm the graph.", details: { testedCount: counts.testedCount, passedCount: counts.passedCount, failedCount: counts.failedCount, inconclusiveCount: counts.inconclusiveCount } }
+      ],
+      degradations: [
+        ...(!result.graphValidity.dagSupported ? [{ code: "unsupported_falsification_graph", section: "testedImplications", message: "The current statistical falsification procedure requires a DAG." }] : []),
+        ...(counts.inconclusiveCount > 0 ? [{ code: "incomplete_ci_tests", section: "testedImplications", message: `${counts.inconclusiveCount} implication tests were inconclusive and excluded from multiple-testing correction.` }] : []),
+        ...(skippedUnobservedParents && result.graphValidity.dagSupported ? [{ code: "unobserved_parent_implications_skipped", section: "testedImplications", message: "Implications for observed nodes with parents outside the observed node order are omitted by the local Markov procedure." }] : [])
+      ],
+      nextActions: [{ id: statisticalStatus === "not_run" ? "provide_falsification_data" : statisticalStatus === "inconclusive" ? "repair_ci_tests" : "review_falsification_scope", priority: statisticalStatus === "failed" || statisticalStatus === "inconclusive" ? "high" : "medium", action: statisticalStatus === "not_run" ? "Supply observed data with an explicit node order when needed." : statisticalStatus === "inconclusive" ? "Inspect inconclusive test reasons and choose a compatible CI test or data preparation." : "Review graph assumptions and the tested local Markov constraints.", reason: "Structural validity and non-rejection do not prove that a causal graph is correct.", suggestedTask: "falsifyGraph" }]
+    })
+  };
+}
 
 function deriveLocalMarkovImplications(
   graph: ReturnType<typeof asCausalGraph>,
@@ -103,7 +154,7 @@ export function falsifyGraph(options: FalsifyGraphOptions): FalsifyGraphResult {
   };
 
   if (!dagSupported) {
-    return {
+    return withFalsificationAgent(options, {
       task: "falsifyGraph",
       graph: graph.toShape(),
       graphKind: graph.getKind(),
@@ -122,7 +173,7 @@ export function falsifyGraph(options: FalsifyGraphOptions): FalsifyGraphResult {
       assumptions: ["This MVP falsification layer only supports DAG inputs."],
       limitations: ["PAG, CPDAG, ADMG, and permutation-based graph falsification are out of scope in this step."],
       caveats: ["Unsupported graph types are reported structurally but not statistically tested here."]
-    };
+    });
   }
 
   if (options.data) {
@@ -136,7 +187,7 @@ export function falsifyGraph(options: FalsifyGraphOptions): FalsifyGraphResult {
   const implications = deriveLocalMarkovImplications(graph, observedNodeOrder);
 
   if (!options.data) {
-    return {
+    return withFalsificationAgent(options, {
       task: "falsifyGraph",
       graph: graph.toShape(),
       graphKind: GRAPH_KIND.dag,
@@ -155,7 +206,7 @@ export function falsifyGraph(options: FalsifyGraphOptions): FalsifyGraphResult {
       assumptions: ["Local Markov implications are derived from the supplied DAG."],
       limitations: ["No data matrix was provided, so this run only returns sanity checks and implied CI constraints."],
       caveats: ["A graph that survives these structural checks is not thereby confirmed to be true."]
-    };
+    });
   }
 
   const ciTest = options.ciTest ?? inferConditionalIndependenceTest(options.data);
@@ -185,6 +236,9 @@ export function falsifyGraph(options: FalsifyGraphOptions): FalsifyGraphResult {
         yIndex,
         conditioningIndices as number[]
       );
+      if (!Number.isFinite(pValue) || pValue < 0 || pValue > 1) {
+        throw new Error("Conditional independence test returned a non-finite or out-of-range p-value; expected a value in [0, 1].");
+      }
       return {
         ...implication,
         status: pValue > alpha ? "passed" : "failed",
@@ -228,7 +282,7 @@ export function falsifyGraph(options: FalsifyGraphOptions): FalsifyGraphResult {
   const inconclusiveImplications = testedImplications.filter((implication) => implication.status === "inconclusive");
   const passedCount = testedImplications.filter((implication) => implication.status === "passed").length;
 
-  return {
+  return withFalsificationAgent(options, {
     task: "falsifyGraph",
     graph: graph.toShape(),
     graphKind: GRAPH_KIND.dag,
@@ -242,7 +296,7 @@ export function falsifyGraph(options: FalsifyGraphOptions): FalsifyGraphResult {
       passedCount,
       failedCount: failedImplications.length,
       inconclusiveCount: inconclusiveImplications.length,
-      falsified: failedImplications.length > 0
+      falsified: passedCount + failedImplications.length === 0 ? null : failedImplications.length > 0
     },
     assumptions: [
       "Uses DAG local Markov implications as the falsifiable conditional independence constraints.",
@@ -259,5 +313,5 @@ export function falsifyGraph(options: FalsifyGraphOptions): FalsifyGraphResult {
         ? `Benjamini-Hochberg FDR control at level ${alpha} was applied across the tested implications.`
         : "No multiple-testing control is applied; with many implications, expect false rejections at the raw alpha level."
     ]
-  };
+  }, ciTest);
 }

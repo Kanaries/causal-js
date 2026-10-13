@@ -1,5 +1,7 @@
-import { GRAPH_KIND } from "@causal-js/core";
+import { GRAPH_KIND, type ValidationConfiguration } from "@causal-js/core";
+import { describeAlgorithm } from "@causal-js/discovery";
 
+import { createTaskAgent, defaultDiscoveryGraphField, discoveryConfiguration } from "./agent-result";
 import {
   absentEdgeRecord,
   assertNonEmptyMatrix,
@@ -51,6 +53,10 @@ export function stabilityAnalysis(options: StabilityAnalysisOptions): StabilityA
     }
   >();
   const runSummaries: StabilityAnalysisResult["runSummaries"] = [];
+  const runConfigurations: Array<{ iteration: number; configuration: ValidationConfiguration }> = [];
+  const selectedGraphFields = new Set<"graph" | "cpdag" | "dag">();
+  let graphArtifactFallbacks = 0;
+  let graphKindFallbacks = 0;
   const nodeIds = options.discovery.options.nodeLabels
     ? [...options.discovery.options.nodeLabels]
     : Array.from({ length: baseData.columns }, (_, index) => `X${index + 1}`);
@@ -66,6 +72,13 @@ export function stabilityAnalysis(options: StabilityAnalysisOptions): StabilityA
       iteration
     );
     const discovered = runDiscovery(discoveryInput);
+    runConfigurations.push({
+      iteration,
+      configuration: discoveryConfiguration(discoveryInput, discovered.graphField)
+    });
+    selectedGraphFields.add(discovered.graphField);
+    if (discovered.graphField !== defaultDiscoveryGraphField(discoveryInput)) graphArtifactFallbacks += 1;
+    if (discovered.graph.metadata?.graphKindResolution === "fallback") graphKindFallbacks += 1;
 
     runSummaries.push({
       iteration,
@@ -173,11 +186,69 @@ export function stabilityAnalysis(options: StabilityAnalysisOptions): StabilityA
       endpoint1: entry.dominantOrientation!.endpoint1,
       endpoint2: entry.dominantOrientation!.endpoint2
     }));
+  const primaryGraphField = [...selectedGraphFields][0]!;
+  // Rebuilding options may discard inherited properties, and a factory can
+  // change options or data on every iteration. Report what actually ran.
+  const discoveryConfig = runConfigurations[0]!.configuration;
+  const configurationKeys = new Set(runConfigurations.flatMap(({ configuration }) => Object.keys(configuration)));
+  const variedDimensions = [...configurationKeys].filter((key) =>
+    runConfigurations.some(({ configuration }) =>
+      Object.hasOwn(configuration, key) !== Object.hasOwn(discoveryConfig, key)
+      || configuration[key] !== discoveryConfig[key]
+    )
+  ).sort();
+  const configurationsVary = variedDimensions.length > 0;
+  const hasOpaqueImplementation = options.createDiscoveryOptions !== undefined
+    || runConfigurations.some(({ configuration }) => configuration.customImplementation === true);
 
   return {
     task: "stabilityAnalysis",
+    agent: createTaskAgent("stabilityAnalysis", {
+      ...discoveryConfig,
+      baseDataRows: baseData.rows,
+      baseDataColumns: baseData.columns,
+      resampledDataRows: sampleSize,
+      discoverySeed: discoveryConfig.seed ?? null,
+      discoveryConfigurationScope: configurationsVary ? "first-run" : "shared-recorded-dimensions",
+      discoveryConfigurationsVary: configurationsVary,
+      bootstrapSamples,
+      sampleFraction,
+      replace,
+      seed,
+      consensusThreshold,
+      createDiscoveryOptions: options.createDiscoveryOptions ? "custom" : "builtin",
+      customImplementation: hasOpaqueImplementation
+    }, ["edgeFrequency", "orientationStability", "consensusGraph"], {
+      backend: "typescript-bootstrap",
+      seed,
+      diagnostics: [
+        { code: "bootstrap_runs_completed", status: "passed", severity: "info", message: "All requested discovery resamples completed.", details: { completedRuns: runSummaries.length, requestedRuns: bootstrapSamples } },
+        {
+          code: "bootstrap_configuration_consistency",
+          status: configurationsVary || hasOpaqueImplementation ? "inconclusive" : "passed",
+          severity: configurationsVary || hasOpaqueImplementation ? "warning" : "info",
+          message: configurationsVary
+            ? "Recorded discovery configurations vary across bootstrap runs. Provenance contains the first run's configuration; inspect the per-run records."
+            : hasOpaqueImplementation
+              ? "Recorded discovery dimensions agree across runs, but opaque collaborators or the custom factory are not certified as equivalent."
+              : "Recorded discovery configuration dimensions agree across all bootstrap runs.",
+          details: {
+            variedDimensions,
+            ...(configurationsVary ? { runConfigurations } : {})
+          }
+        },
+        { code: "consensus_graph_interpretation", status: "not_applicable", severity: "info", message: "The consensus summarizes bootstrap frequencies; it is not certified as a causal equivalence-class graph." }
+      ],
+      degradations: [
+        ...(graphArtifactFallbacks > 0 ? [{ code: "graph_artifact_fallback", section: "runSummaries", message: `${graphArtifactFallbacks} bootstrap runs returned a different graph artifact than requested.` }] : []),
+        ...(graphKindFallbacks > 0 ? [{ code: "graph_kind_fallback", section: "runSummaries", message: `${graphKindFallbacks} bootstrap runs fell back from their preferred graph kind.` }] : []),
+        ...(configurationsVary ? [{ code: "varying_bootstrap_configuration", section: "provenance.configuration", message: "Discovery parameters or input dimensions vary across resamples. Aggregate stability mixes these recorded configurations; provenance represents the first run only." }] : []),
+        ...(selectedGraphFields.size > 1 ? [{ code: "mixed_graph_artifacts", section: "primaryGraphField", message: "Bootstrap runs returned different graph artifact fields; primaryGraphField reports the first run's field." }] : [])
+      ],
+      nextActions: [{ id: "review_unstable_edges", priority: "medium", action: "Inspect adjacency and orientation frequencies and review weakly supported edges.", reason: "Bootstrap stability measures sampling sensitivity, not causal correctness." }]
+    }),
     algorithm: options.discovery.algorithm,
-    primaryGraphField: options.discovery.graphPreference ?? (options.discovery.algorithm === "ges" || options.discovery.algorithm === "exact-search" || options.discovery.algorithm === "grasp" ? "cpdag" : "graph"),
+    primaryGraphField,
     graphKind: GRAPH_KIND.generic,
     bootstrapConfig: {
       bootstrapSamples,
@@ -191,7 +262,8 @@ export function stabilityAnalysis(options: StabilityAnalysisOptions): StabilityA
     orientationStability,
     consensusGraph: consensusEdges.length === 0 ? null : createGenericGraph(nodeIds, consensusEdges),
     assumptions: [
-      "Uses bootstrap-style row resampling around the existing discovery implementation."
+      "Uses bootstrap-style row resampling around the existing discovery implementation.",
+      ...(describeAlgorithm(options.discovery.algorithm)?.agent.assumptions ?? [])
     ],
     limitations: [
       "Rebuilding CI tests or scores for custom discovery options may require createDiscoveryOptions.",

@@ -94,6 +94,14 @@ console.log(result.estimandSpec?.expression);
 console.log(result.backend);
 ```
 
+For Agent integrations, `describeAlgorithm()` and `describeTask()` expose method
+metadata and JavaScript input schemas. All six task APIs add `result.agent` with
+structured diagnostics, degradations, next actions, configuration provenance,
+and evidence coverage by output. `getDiagnosticSummary()` keeps checks that did
+not run separate from checks that passed. Evidence coverage refers to existing
+test artifacts and does not validate new data or causal assumptions. See
+`docs/tasks/agent-contract.md` and `examples/agent-metadata.ts` in the repository.
+
 Node runtime facade:
 
 ```ts

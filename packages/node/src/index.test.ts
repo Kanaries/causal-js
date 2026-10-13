@@ -65,13 +65,13 @@ describe("@causal-js/node", () => {
       "grasp",
       "gin",
       "cam-uv",
-      "rcd",
-      "calm"
+      "rcd"
     ]);
     expect(getNodeAlgorithmDescriptor("pc")?.availability).toEqual([
       { runtime: "node", supported: true, capabilities: ["cpu", "worker"] }
     ]);
-    expect(isNodeAlgorithmSupported("calm")).toBe(true);
+    expect(isNodeAlgorithmSupported("calm")).toBe(false);
+    expect(getNodeAlgorithmDescriptor("calm")).toBeUndefined();
   });
 
   it("keeps the portable v1 algorithms grouped under nodeAlgorithms", () => {

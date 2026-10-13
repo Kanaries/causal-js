@@ -1,4 +1,5 @@
 export * from "./catalog";
+export * from "./agent-metadata";
 export * from "./anm";
 export * from "./camuv";
 export * from "./cdnod";

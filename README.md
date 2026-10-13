@@ -51,6 +51,14 @@ Use these entry points based on the job you are trying to do:
 
 If you need full ID, richer graph classes such as PAG/MAG/ADMG, counterfactuals, permutation falsification, or estimator construction, this repository does not currently promise that surface.
 
+For Agent integrations, use `describeAlgorithm()` and `describeTask()` to inspect
+method assumptions, input schemas, recovery guidance, and cost. All six task
+results include `result.agent` with structured diagnostics, degradations, next
+actions, execution configuration, and validation evidence matched to specific
+configurations and outputs. Evidence coverage does not validate a new dataset or
+establish causal assumptions. See the [Agent contract](docs/tasks/agent-contract.md)
+and [typed example](examples/agent-metadata.ts).
+
 ## Public Package
 
 This repository is organized as a single Git repo with a `pnpm` workspace. The

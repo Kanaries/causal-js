@@ -1,5 +1,6 @@
 import { GRAPH_KIND } from "@causal-js/core";
 
+import { assertCountLimit, createTaskAgent, finiteNumberOrNull, graphConfiguration } from "./agent-result";
 import {
   asCausalGraph,
   assertDagLike,
@@ -97,6 +98,8 @@ function canonicalAdjustmentSet(
 }
 
 export function findAdjustmentSets(options: FindAdjustmentSetsOptions): FindAdjustmentSetsResult {
+  assertCountLimit(options.maxSetSize, "findAdjustmentSets maxSetSize", true);
+  assertCountLimit(options.maxResults, "findAdjustmentSets maxResults", true);
   const graph = asCausalGraph(options.graph);
   assertSingletonNodeQuery(options.treatment, options.outcome);
   assertDagLike(graph);
@@ -113,6 +116,8 @@ export function findAdjustmentSets(options: FindAdjustmentSetsOptions): FindAdju
   const markedCandidates = markMinimalCandidates(validCandidates);
   const minimalCandidates = markedCandidates.filter((candidate) => candidate.minimal);
   const limitedCandidates = markedCandidates.slice(0, options.maxResults ?? Number.POSITIVE_INFINITY);
+  const searchComplete = maxSetSize >= eligibleCovariates.length;
+  const resultTruncated = limitedCandidates.length < markedCandidates.length;
 
   const assumptions = ["Uses a DAG-only backdoor-adjustment check on the backdoor graph."];
   if (hasDirectedPath(graph, options.treatment, options.outcome)) {
@@ -121,6 +126,30 @@ export function findAdjustmentSets(options: FindAdjustmentSetsOptions): FindAdju
 
   return {
     task: "findAdjustmentSets",
+    agent: createTaskAgent("findAdjustmentSets", {
+      ...graphConfiguration(graph.toShape()),
+      graphKind: GRAPH_KIND.dag,
+      queryShape: "singleton-treatment-singleton-outcome",
+      maxSetSize: finiteNumberOrNull(maxSetSize),
+      maxResults: finiteNumberOrNull(options.maxResults),
+      eligibleCovariateCount: eligibleCovariates.length,
+      searchComplete,
+      resultTruncated
+    }, ["candidateSets", "canonicalSet"], {
+      backend: "dag-backdoor",
+      diagnostics: [{
+        code: "adjustment_search",
+        status: markedCandidates.length > 0 ? "passed" : searchComplete ? "failed" : "inconclusive",
+        severity: markedCandidates.length > 0 ? "info" : "warning",
+        message: markedCandidates.length > 0 ? "Found structurally valid adjustment sets within the searched subset sizes." : searchComplete ? "No valid adjustment set was found among the eligible measured covariates." : "No valid adjustment set was found within the requested subset-size limit.",
+        details: { searchComplete, resultTruncated, evaluatedMaximumSetSize: finiteNumberOrNull(maxSetSize) }
+      }],
+      degradations: [
+        ...(!searchComplete ? [{ code: "adjustment_search_limited", section: "candidateSets", message: "The maxSetSize limit excludes larger candidate sets; counts describe the searched subset sizes only." }] : []),
+        ...(resultTruncated ? [{ code: "adjustment_results_truncated", section: "candidateSets", message: "maxResults truncates the returned candidate list; counts cover all searched candidates." }] : [])
+      ],
+      nextActions: [{ id: markedCandidates.length > 0 ? "identify_adjusted_effect" : "review_adjustment_scope", priority: markedCandidates.length > 0 ? "medium" : "high", action: markedCandidates.length > 0 ? "Identify the effect and select an estimator compatible with a valid adjustment set." : searchComplete ? "Review the graph and consider identification methods beyond adjustment." : "Increase maxSetSize to search additional candidate sets.", reason: "Adjustment validity is conditional on the supplied causal graph and search scope.", suggestedTask: "identifyEffect" }]
+    }),
     graph: graph.toShape(),
     graphKind: GRAPH_KIND.dag,
     graphType: GRAPH_KIND.dag,
@@ -155,6 +184,16 @@ export function isAdjustmentSet(options: IsAdjustmentSetOptions): IsAdjustmentSe
 
   return {
     task: "isAdjustmentSet",
+    agent: createTaskAgent("isAdjustmentSet", {
+      ...graphConfiguration(graph.toShape()),
+      graphKind: GRAPH_KIND.dag,
+      queryShape: "singleton-treatment-singleton-outcome",
+      adjustmentSetSize: candidate.variables.length
+    }, ["valid"], {
+      backend: "dag-backdoor",
+      diagnostics: [{ code: "adjustment_set_validity", status: candidate.valid ? "passed" : "failed", severity: candidate.valid ? "info" : "warning", message: candidate.valid ? "The supplied set satisfies the implemented DAG adjustment criterion." : "The supplied set does not satisfy the implemented DAG adjustment criterion.", details: { forbiddenNodesInSet: candidate.forbiddenDescendants, blockedInBackdoorGraph: candidate.blockedInBackdoorGraph } }],
+      nextActions: [{ id: candidate.valid ? "select_adjustment_estimator" : "find_alternative_adjustment", priority: candidate.valid ? "medium" : "high", action: candidate.valid ? "Choose an estimator and check overlap for the proposed covariates." : "Search for alternative valid adjustment sets.", reason: "A graph criterion checks structural admissibility, not finite-sample estimator performance.", ...(candidate.valid ? {} : { suggestedTask: "findAdjustmentSets" }) }]
+    }),
     graph: graph.toShape(),
     graphKind: GRAPH_KIND.dag,
     treatment: options.treatment,

@@ -1,4 +1,6 @@
 import type {
+  AgentMethodMetadata,
+  AgentResult,
   ConditionalIndependenceTest,
   EdgeDescriptor,
   GraphKind,
@@ -58,6 +60,8 @@ export type DiscoverGraphInput =
 export type DiscoveryGraphPreference = "graph" | "cpdag" | "dag";
 
 export interface TaskResultBase {
+  /** Additive, JSON-safe guidance, diagnostics, evidence and execution provenance. */
+  agent: AgentResult;
   task:
     | "discoverGraph"
     | "findAdjustmentSets"
@@ -193,6 +197,7 @@ export type IdentificationBackendStatus = "available";
 export type IdentificationQueryShape = "singleton-treatment-singleton-outcome";
 
 export interface IdentificationBackendDescriptor {
+  agent: AgentMethodMetadata;
   id: IdentificationBackendId;
   label: string;
   status: IdentificationBackendStatus;

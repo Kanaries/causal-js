@@ -2,6 +2,7 @@ import { GRAPH_KIND } from "@causal-js/core";
 import type { GraphKind } from "@causal-js/core";
 
 import { runDagBackdoorOnlyIdentificationBackend, runDagFirstIdentificationBackend } from "./identify-backend";
+import { getIdentificationBackendMetadata } from "./agent-metadata";
 import type {
   IdentificationBackendContext,
   IdentificationBackendDescriptor,
@@ -23,6 +24,7 @@ const IDENTIFICATION_BACKEND_REGISTRY: Record<IdentificationBackendId, Identific
       id: "dag-first-mvp",
       label: "DAG-First MVP",
       status: "available",
+      agent: getIdentificationBackendMetadata("dag-first-mvp"),
       graphKinds: [GRAPH_KIND.dag],
       supportedMethods: ["zero-effect", "backdoor", "frontdoor"],
       queryShape: "singleton-treatment-singleton-outcome",
@@ -41,6 +43,7 @@ const IDENTIFICATION_BACKEND_REGISTRY: Record<IdentificationBackendId, Identific
       id: "dag-backdoor-only",
       label: "DAG Backdoor Only",
       status: "available",
+      agent: getIdentificationBackendMetadata("dag-backdoor-only"),
       graphKinds: [GRAPH_KIND.dag],
       supportedMethods: ["zero-effect", "backdoor"],
       queryShape: "singleton-treatment-singleton-outcome",
@@ -81,6 +84,7 @@ export function getIdentificationBackendDescriptor(
 ): IdentificationBackendDescriptor {
   return {
     ...IDENTIFICATION_BACKEND_REGISTRY[backend].descriptor,
+    agent: getIdentificationBackendMetadata(backend),
     graphKinds: [...IDENTIFICATION_BACKEND_REGISTRY[backend].descriptor.graphKinds],
     supportedMethods: [...IDENTIFICATION_BACKEND_REGISTRY[backend].descriptor.supportedMethods],
     limitations: [...IDENTIFICATION_BACKEND_REGISTRY[backend].descriptor.limitations]

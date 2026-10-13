@@ -1,4 +1,5 @@
 export * from "./adjustment";
+export * from "./agent-metadata";
 export * from "./bridge";
 export * from "./discover";
 export * from "./falsify";
@@ -7,6 +8,7 @@ export * from "./identify-registry";
 export * from "./identify";
 export * from "./stability";
 export * from "./types";
+export * from "./validation-evidence";
 
 // common.ts is mostly internal plumbing; only the helpers with a stable,
 // user-facing meaning are re-exported (0.2.0 removed the accidental

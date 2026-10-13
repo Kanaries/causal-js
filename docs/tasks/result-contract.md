@@ -11,6 +11,9 @@ Every task result includes:
 - `assumptions`: non-empty list of modeling or runtime assumptions the result relies on
 - `limitations`: non-empty list of current implementation boundaries
 - `caveats`: non-empty list of interpretation warnings
+- `agent`: versioned, JSON-compatible diagnostics, degradations, next actions,
+  configuration-level validation evidence, and execution provenance; see the
+  [Agent contract](agent-contract.md)
 
 These three narrative lists are not optional metadata. They are part of the contract and should always be present with at least one concrete sentence.
 
@@ -88,6 +91,7 @@ Current invariants:
 - `overallSummary.inconclusiveCount` equals `inconclusiveImplications.length`
 - `overallSummary.falsified` is `true` only when at least one tested implication failed
 - `overallSummary.falsified` is `null` when this MVP does not run a statistical falsification decision
+- `overallSummary.falsified` is also `null` when no test has a conclusive result; invalid p-values are inconclusive
 - `impliedConditionalIndependences` only includes implications that are testable against the observed measured node set for the current run
 
 ## Stability
