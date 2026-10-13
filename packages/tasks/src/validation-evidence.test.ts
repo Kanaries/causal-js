@@ -20,31 +20,33 @@ function confounder() {
 // The intervention changes Y's mean by exactly .3; selection on Z confounds
 // the observational contrast. No estimated regression or library CI is used.
 type Assignment = Record<string, number>;
-const joint: Array<{ values: Assignment; probability: number }> = [];
+type Distribution = Array<{ values: Assignment; probability: number }>;
+const joint: Distribution = [];
 for (const z of [0, 1]) for (const x of [0, 1]) for (const y of [0, 1]) {
   const px = 0.2 + 0.6 * z;
   const py = 0.1 + 0.3 * x + 0.2 * z;
   joint.push({ values: { Z: z, X: x, Y: y }, probability: (z ? 0.4 : 0.6) * (x ? px : 1 - px) * (y ? py : 1 - py) });
 }
 
-function probability(variables: string[], given: string[], assignment: Assignment): number {
+function probability(variables: string[], given: string[], assignment: Assignment, population = joint): number {
   const matches = (names: string[], values: Assignment) => names.every((name) => values[name] === assignment[name]);
-  const denominator = joint.filter((row) => matches(given, row.values)).reduce((sum, row) => sum + row.probability, 0);
-  const numerator = joint.filter((row) => matches([...given, ...variables], row.values)).reduce((sum, row) => sum + row.probability, 0);
+  const denominator = population.filter((row) => matches(given, row.values)).reduce((sum, row) => sum + row.probability, 0);
+  const numerator = population.filter((row) => matches([...given, ...variables], row.values)).reduce((sum, row) => sum + row.probability, 0);
   return numerator / denominator;
 }
 
-function evaluate(tree: IdentificationExpressionNode, assignment: Assignment): number {
+function evaluate(tree: IdentificationExpressionNode, assignment: Assignment, population = joint): number {
   switch (tree.type) {
     case "constant": return Number(tree.value);
-    case "probability": return probability(tree.variables, tree.conditionedOn, assignment);
-    case "product": return tree.factors.reduce((value, factor) => value * evaluate(factor, assignment), 1);
+    case "probability": return probability(tree.variables, tree.conditionedOn, assignment, population);
+    case "product": return tree.factors.reduce((value, factor) => value * evaluate(factor, assignment, population), 1);
     case "sum": {
       const sumOver = (index: number, values: Assignment): number => index === tree.variables.length
-        ? evaluate(tree.expression, values)
+        ? evaluate(tree.expression, values, population)
         : [0, 1].reduce((sum, value) => sum + sumOver(index + 1, { ...values, [tree.variables[index]!]: value }), 0);
       return sumOver(0, assignment);
     }
+    case "quotient": return evaluate(tree.numerator, assignment, population) / evaluate(tree.denominator, assignment, population);
   }
 }
 
@@ -101,6 +103,64 @@ describe("configuration evidence anchors", () => {
     expect(partial.status).toBe("partially_covered");
     expect(partial.outputs.find((output) => output.output === "standardError")!.status).toBe("not_covered");
     expect(getTaskValidationScope("identifyEffect", { ...config, futureOption: true }, ["identifiable"]).status).toBe("not_covered");
+  });
+
+  it("evaluates the complete ID backend on the confounder causal model", () => {
+    const result = identifyEffect({ ...confounder(), backend: "id" });
+    expect(result.method).toBe("id");
+    expect(evaluate(result.estimandSpec!.expressionTree, { X: 1, Y: 1 })).toBeCloseTo(0.48, 12);
+    expect(evaluate(result.estimandSpec!.expressionTree, { X: 0, Y: 1 })).toBeCloseTo(0.18, 12);
+    expect(result.agent.validation.status).toBe("covered");
+    expect(result.agent.validation.outputs[0]!.evidence[0]!.configuration).toEqual(result.agent.provenance.configuration);
+  });
+
+  it("evaluates ADMG frontdoor ID through a latent causal model", () => {
+    const graph = CausalGraph.fromNodeIds(["X", "M", "Y"], { kind: GRAPH_KIND.admg });
+    graph.addDirectedEdge("X", "M");
+    graph.addDirectedEdge("M", "Y");
+    graph.addBidirectedEdge("X", "Y");
+    const observed: Distribution = [];
+    // Marginalize U from U→X→M→Y, U→Y. Independent Bernoulli noise supplies
+    // positive conditionals; do(X=x) leaves E[U]=.4 and E[M]=.15+.65x.
+    for (const x of [0, 1]) for (const m of [0, 1]) for (const y of [0, 1]) {
+      let weight = 0;
+      for (const u of [0, 1]) {
+        const px = 0.2 + 0.6 * u;
+        const pm = 0.15 + 0.65 * x;
+        const py = 0.1 + 0.45 * m + 0.2 * u;
+        weight += (u ? 0.4 : 0.6) * (x ? px : 1 - px) * (m ? pm : 1 - pm) * (y ? py : 1 - py);
+      }
+      observed.push({ values: { X: x, M: m, Y: y }, probability: weight });
+    }
+    const result = identifyEffect({ graph: graph.toShape(), treatment: "X", outcome: "Y" });
+    expect(result.identifiable).toBe(true);
+    for (const x of [0, 1]) for (const y of [0, 1]) {
+      const mean = 0.1 + 0.45 * (0.15 + 0.65 * x) + 0.2 * 0.4;
+      expect(evaluate(result.estimandSpec!.expressionTree, { X: x, Y: y }, observed)).toBeCloseTo(y ? mean : 1 - mean, 12);
+    }
+    expect(result.agent.validation.status).toBe("covered");
+    expect(result.agent.validation.outputs[0]!.evidence[0]!.configuration).toEqual(result.agent.provenance.configuration);
+    expect(getTaskValidationScope("identifyEffect", result.agent.provenance.configuration, ["witness"]).status).toBe("not_covered");
+  });
+
+  it("rejects the bow using observationally identical causal countermodels", () => {
+    // X=U, P(U=1)=.5. The diagonal entries give the same positive P(X,Y),
+    // while the off-diagonal counterfactual responses differ.
+    const first = [[0.2, 0.7], [0.3, 0.8]];
+    const second = [[0.2, 0.1], [0.9, 0.8]];
+    const observed = (table: number[][]) => [0, 1].flatMap((x) => [0, 1].map((y) => 0.5 * (y ? table[x]![x]! : 1 - table[x]![x]!)));
+    expect(observed(first)).toEqual(observed(second));
+    expect(observed(first).every((value) => value > 0)).toBe(true);
+    expect((first[1]![0]! + first[1]![1]!) / 2).toBeCloseTo(0.55, 12);
+    expect((second[1]![0]! + second[1]![1]!) / 2).toBeCloseTo(0.85, 12);
+    const graph = CausalGraph.fromNodeIds(["X", "Y"], { kind: GRAPH_KIND.admg });
+    graph.addDirectedEdge("X", "Y");
+    graph.addBidirectedEdge("X", "Y");
+    const result = identifyEffect({ graph: graph.toShape(), treatment: "X", outcome: "Y" });
+    expect(result.identifiable).toBe(false);
+    expect(result.estimandSpec).toBeNull();
+    expect(result.agent.validation.status).toBe("covered");
+    expect(result.agent.validation.outputs[0]!.evidence[0]!.configuration).toEqual(result.agent.provenance.configuration);
   });
 
   it("ties every manifest record to a real test and returns detached records", () => {

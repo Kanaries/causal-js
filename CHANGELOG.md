@@ -1,5 +1,33 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Agent method metadata, shared task diagnostics, effective configuration
+  provenance, and output-specific validation evidence.
+- ADMG bows with separate directed/bidirected queries, removal, metadata,
+  district queries, and lossless GraphShape serialization.
+- Complete `id` identification backend, plus `identifyById` for disjoint
+  treatment/outcome sets, recursive traces and ID failure subproblems.
+- Quotient expression AST nodes and scope-aware expression helpers.
+- Independent SCM population validation and exhaustive small-graph hedge checks.
+
+### Changed
+
+- `identifyEffect` selects `id` for ADMGs under `auto`; DAG defaults remain
+  `dag-first-mvp`. Backend descriptors now expose `defaultForGraphKinds`.
+- Single-edge queries on bows require an edge type. Duplicate serialized pairs
+  are rejected except an ADMG's directed-plus-bidirected pair; legacy exports
+  reject bows. ADMG directed-cycle insertions roll back instead of remaining in
+  the graph until validation.
+- Identification requires explicit resolution of CPDAG/PAG inputs.
+- Task results and algorithm/backend descriptors include required Agent fields;
+  typed mocks and exhaustive switches over backends/methods/AST nodes need updating.
+- Falsification with no conclusive CI tests returns `null`; invalid p-values
+  remain inconclusive. Invalid search limits are rejected; positive infinity
+  retains its unbounded semantics. CALM is reported unavailable.
+
 ## 0.2.1
 
 ### Added

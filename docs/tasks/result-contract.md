@@ -63,13 +63,20 @@ Current invariants:
 - if `method` is `zero-effect`, `witness` is empty and `estimandSpec.strategy` is `zero-effect`
 - if `method` is `backdoor`, `witness.adjustmentSet` is present and `estimandSpec.strategy` is `backdoor`
 - if `method` is `frontdoor`, `witness.mediators` is present and `estimandSpec.strategy` is `frontdoor`
-- `backend` resolves from the current backend registry; in this step `auto` resolves to `dag-first-mvp`, while explicit selection may also return `dag-backdoor-only`
-- `diagnostics` records the attempted zero-effect, backdoor, frontdoor, and scope checks in the current backend
+- if `method` is `id`, `witness.id.trace` is present and `estimandSpec.strategy` is `id`
+- if `backend` is `id` and identification fails, `witness.id.failure` records the step-5 recursive subproblem
+- `backend` resolves from the current registry; `auto` chooses `dag-first-mvp` for DAGs and `id` for ADMGs
+- `diagnostics` records attempted DAG witness rules or the complete ID result, according to the selected backend
 
 `estimand` is a compatibility-oriented rendered description. `estimandSpec` is the structured contract for supported identifiable cases.
-`estimandSpec.expressionTree` is the current symbolic expression node for supported DAG-first identification outcomes. `estimandSpec.expression` is the rendered equation string derived from that tree.
-The current backend family is now factored behind dedicated backend runners plus a registry-backed selector so future ID backends can extend the workflow without changing the top-level `identifyEffect()` contract.
-The registry is introspectable via `listIdentificationBackends()`, `listIdentificationBackendsForGraphKind()`, `supportsIdentificationBackendGraphKind()`, `listIdentificationBackendDescriptors()`, and `getIdentificationBackendDescriptor()`. In this step, the descriptor contract is stable enough to expose backend label, status, supported graph kinds, supported methods, query shape, auto-selection default, summary, and limitations. Explicit backend selection must reject incompatible graph kinds instead of silently falling back.
+`estimandSpec.expressionTree` is the symbolic expression for a successful
+identification result from any backend. `estimandSpec.expression` is the rendered
+equation string derived from that tree.
+The expression AST includes `quotient` nodes for recursive ID kernels. Sums bind
+variables locally; consumers must extend exhaustive AST switches accordingly.
+`witness.id.failure` is an ID subproblem, not a claimed pair of pruned C-forests.
+See [complete ID](id-identification.md).
+The registry is introspectable via `listIdentificationBackends()`, `listIdentificationBackendsForGraphKind()`, `supportsIdentificationBackendGraphKind()`, `listIdentificationBackendDescriptors()`, and `getIdentificationBackendDescriptor()`. Descriptors expose backend label, status, supported graph kinds, methods, query shape, `defaultForGraphKinds`, summary, limitations and Agent guidance. `defaultForAuto` means that at least one graph kind defaults to that backend. Explicit backend selection rejects incompatible graph kinds instead of silently falling back.
 See `docs/tasks/backend-selection.md` for the operational guidance on when to pin a backend instead of relying on `auto`.
 
 ## Falsification
@@ -113,4 +120,7 @@ Current invariants:
 
 ## Current Scope
 
-This contract is intentionally tied to the current Step 3 production-scope DAG-first boundary. More general graph families, richer symbolic estimands, and stronger falsification procedures should extend this contract explicitly rather than overloading existing fields silently.
+The existing Step 3 production-scope DAG-first tasks retain their boundaries.
+The experimental ID backend extends identification to observed ADMGs; adjustment
+and statistical falsification remain DAG-only. Conditional-effect IDC,
+counterfactuals, PAG identification and numerical estimators are not added.

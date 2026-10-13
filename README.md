@@ -45,11 +45,17 @@ Use these entry points based on the job you are trying to do:
 - `anm(x, y)`: score both pairwise additive-noise directions without imposing an application-specific orientation threshold.
 - `discoverGraph(...)`: wrap an existing discovery algorithm behind a stable task result object.
 - `findAdjustmentSets(...)` / `isAdjustmentSet(...)`: inspect valid DAG backdoor covariate sets.
-- `identifyEffect(...)`: ask whether a singleton treatment effect is identifiable under the supported DAG-first rules.
+- `identifyEffect(...)`: identify a singleton effect using DAG witness rules or the complete ID backend on an observed DAG/ADMG.
+- `identifyById(...)`: run complete ID directly for disjoint treatment and outcome sets.
 - `falsifyGraph(...)`: run DAG sanity checks plus implied conditional independence validation against observed data.
 - `stabilityAnalysis(...)`: bootstrap an existing discovery configuration and summarize robustness.
 
-If you need full ID, richer graph classes such as PAG/MAG/ADMG, counterfactuals, permutation falsification, or estimator construction, this repository does not currently promise that surface.
+The experimental `id` backend supports ADMG bows, recursive kernel expressions,
+and explicit non-identifiability witnesses. `auto` keeps the existing DAG-first
+backend for DAGs and selects ID for ADMGs. See [complete ID](docs/tasks/id-identification.md)
+and the [typed example](examples/id-identification.ts). PAG/MAG identification,
+conditional-effect IDC, counterfactuals, permutation falsification, and estimator
+construction remain outside the current surface.
 
 For Agent integrations, use `describeAlgorithm()` and `describeTask()` to inspect
 method assumptions, input schemas, recovery guidance, and cost. All six task
@@ -165,7 +171,7 @@ The recommended DAG-first order is:
 5. `stabilityAnalysis(...)`
 
 See [tasks/index.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/index.md) for the full task surface.
-See [tasks/backend-selection.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/backend-selection.md) before choosing `auto`, `dag-first-mvp`, or `dag-backdoor-only`.
+See [tasks/backend-selection.md](docs/tasks/backend-selection.md) before choosing `auto`, `dag-first-mvp`, `dag-backdoor-only`, or `id`.
 See [tasks/operational-readiness.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/operational-readiness.md) for release checks and interpretation boundaries.
 
 ## Usage
@@ -347,9 +353,9 @@ console.log(stability.edgeFrequency);
 
 Current Step 3 task-workflow boundary:
 
-- graph-analysis tasks are DAG-first
-- `identifyEffect()` supports backdoor, core frontdoor, zero-effect, and current-MVP non-identifiable results
-- `identifyEffect()` now accepts `backend?: "auto" | "dag-first-mvp" | "dag-backdoor-only"`; `auto` resolves to `dag-first-mvp`, while `dag-backdoor-only` intentionally restricts identification to zero-effect and backdoor logic
+- adjustment and falsification remain DAG-first; complete identification additionally supports observed ADMGs
+- `identifyEffect()` supports backdoor, core frontdoor, zero-effect, complete `id`, and backend-qualified non-identifiable results
+- `identifyEffect()` accepts `backend?: "auto" | "dag-first-mvp" | "dag-backdoor-only" | "id"`; `auto` resolves to `dag-first-mvp` for DAGs and `id` for ADMGs
 - `listIdentificationBackends()`, `listIdentificationBackendsForGraphKind()`, `supportsIdentificationBackendGraphKind()`, `listIdentificationBackendDescriptors()`, and `getIdentificationBackendDescriptor()` expose the currently available identification backends, graph-kind compatibility, and the `auto` selection contract
 - explicit backend selection now rejects incompatible graph kinds instead of silently falling back
 - `falsifyGraph()` supports sanity checks plus implied conditional independence validation, not full permutation falsification

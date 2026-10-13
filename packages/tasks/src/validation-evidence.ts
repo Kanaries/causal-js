@@ -44,7 +44,34 @@ const evidence: ValidationEvidenceRecord[] = [
     outputs: ["identifiable", "estimandSpec"],
     artifact: { path: analyticalArtifact, test: "evaluates the identified formula against an enumerated causal model" },
     scope: "Backdoor identification on Z→X, Z→Y, X→Y. The returned expression is evaluated using the exact observed joint distribution of a finite binary SCM and compared with its intervention distribution. Covers this backdoor fixture, not frontdoor formulas, arbitrary graph topologies or general ID."
-  }))
+  })),
+  {
+    id: "id-discrete-dag-adjustment-v1",
+    method: "identifyEffect",
+    kind: "analytical",
+    configuration: { ...dagQuery, backend: "id", identificationMethod: "id" },
+    outputs: ["identifiable", "estimandSpec"],
+    artifact: { path: analyticalArtifact, test: "evaluates the complete ID backend on the confounder causal model" },
+    scope: "Complete ID on the fully observed three-node confounder DAG Z→X, Z→Y, X→Y. The expression AST is evaluated against an independently enumerated binary population and its intervention distribution. This fixture does not certify all DAGs or arbitrary observed distributions."
+  },
+  {
+    id: "id-discrete-admg-frontdoor-v1",
+    method: "identifyEffect",
+    kind: "analytical",
+    configuration: { ...dagQuery, graphKind: "admg", backend: "id", identificationMethod: "id" },
+    outputs: ["identifiable", "estimandSpec"],
+    artifact: { path: analyticalArtifact, test: "evaluates ADMG frontdoor ID through a latent causal model" },
+    scope: "The ADMG X→M→Y with X↔Y. The returned recursive-kernel expression is evaluated against an exact observed binary distribution obtained by marginalizing U from U→X,U→Y, and compared with independent interventional expectations. No claim about every ADMG, untested configurations, or positivity on user data."
+  },
+  {
+    id: "id-bow-countermodels-v1",
+    method: "identifyEffect",
+    kind: "analytical",
+    configuration: { ...dagQuery, graphKind: "admg", backend: "id", identificationMethod: "non-identifiable" },
+    outputs: ["identifiable", "estimandSpec"],
+    artifact: { path: analyticalArtifact, test: "rejects the bow using observationally identical causal countermodels" },
+    scope: "The two-node bow X→Y and X↔Y. Two binary SCMs have identical strictly positive observed P(X,Y) but different P(Y|do(X)), independently establishing non-identifiability for this fixture. Does not certify every failed ID query or the entire trace."
+  }
 ];
 
 /** Detached manifest records. Artifact paths refer to repository tests, not runtime files. */

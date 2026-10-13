@@ -12,77 +12,16 @@ import type {
   IdentificationBackendContext,
   IdentificationBackendEvaluation,
   IdentificationDiagnostic,
-  IdentificationExpressionNode,
   IdentificationEstimandFactor,
   IdentificationEstimandSpec,
   IdentificationWitness
 } from "./types";
 
-export function renderQuery(treatment: string, outcome: string): string {
-  return `P(${outcome} | do(${treatment}))`;
-}
+import { probabilityNode, productNode, renderEquation, renderProbability, renderQuery, sumNode } from "./expressions";
 
-export function renderProbability(variables: readonly string[], conditionedOn: readonly string[] = []): string {
-  const variableList = variables.join(", ");
-  return conditionedOn.length === 0
-    ? `P(${variableList})`
-    : `P(${variableList} | ${conditionedOn.join(", ")})`;
-}
-
-export function probabilityNode(
-  variables: readonly string[],
-  conditionedOn: readonly string[] = []
-): IdentificationExpressionNode {
-  return {
-    type: "probability",
-    variables: [...variables],
-    conditionedOn: [...conditionedOn]
-  };
-}
-
-export function constantNode(value: string): IdentificationExpressionNode {
-  return {
-    type: "constant",
-    value
-  };
-}
-
-export function productNode(...factors: IdentificationExpressionNode[]): IdentificationExpressionNode {
-  return {
-    type: "product",
-    factors
-  };
-}
-
-export function sumNode(
-  variables: readonly string[],
-  expression: IdentificationExpressionNode
-): IdentificationExpressionNode {
-  return {
-    type: "sum",
-    variables: [...variables],
-    expression
-  };
-}
-
-export function renderExpressionTree(node: IdentificationExpressionNode): string {
-  switch (node.type) {
-    case "constant":
-      return node.value;
-    case "probability":
-      return renderProbability(node.variables, node.conditionedOn);
-    case "product":
-      return node.factors.map((factor) => renderExpressionTree(factor)).join(" ");
-    case "sum":
-      return `Σ_${node.variables.join(",")} ${renderExpressionTree(node.expression)}`;
-    default:
-      return "";
-  }
-}
-
-export function renderEquation(query: string, expressionTree: IdentificationExpressionNode): string {
-  return `${query} = ${renderExpressionTree(expressionTree)}`;
-}
+// Preserve the existing public helper exports while sharing one AST renderer
+// with the general ID backend.
+export * from "./expressions";
 
 export function buildAdjustmentWitness(adjustmentSet: string[] | undefined): IdentificationWitness {
   if (adjustmentSet !== undefined) {

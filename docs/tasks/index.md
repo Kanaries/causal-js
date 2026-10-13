@@ -2,6 +2,10 @@
 
 Step 3 adds a task-oriented workflow layer on top of the existing discovery substrate. The current workflow is intentionally DAG-first, identification-first, and production-scope only within its explicitly documented boundary.
 
+The experimental [complete ID backend](id-identification.md) additionally
+supports observed ADMGs, including bows. It shares `identifyEffect` and the Agent
+result contract; `identifyById` exposes joint treatment/outcome queries.
+
 ## Recommended Order
 
 1. `discoverGraph(...)`
@@ -21,6 +25,7 @@ import {
   FisherZTest,
   discoverGraph,
   identifyEffect,
+  resolveDagForTasks,
   falsifyGraph,
   stabilityAnalysis
 } from "@kanaries/causal";
@@ -45,14 +50,17 @@ const discovered = discoverGraph({
   }
 });
 
+// This chooses one DAG from the equivalence class. Results are conditional
+// on its orientations; review the returned caveats and domain assumptions.
+const resolved = resolveDagForTasks(discovered.graph, { onUndirected: "extend" });
 const identified = identifyEffect({
-  graph: discovered.graph,
+  graph: resolved.dag,
   treatment: "X",
   outcome: "Y"
 });
 
 const falsified = falsifyGraph({
-  graph: discovered.graph,
+  graph: resolved.dag,
   data,
   observedNodeOrder: ["X", "Y", "Z"]
 });
@@ -79,9 +87,9 @@ console.log(stability.edgeFrequency);
 
 ## Current Boundary
 
-- graph-analysis tasks support directed DAGs only
+- adjustment and statistical falsification support directed DAGs only
 - discovery is wrapped, not reimplemented
-- identification stops at backdoor, core frontdoor, zero-effect, and current-MVP non-identifiable
+- identification supports DAG witness rules and complete ID on observed DAGs/ADMGs
 - identification backend selection is explicit and introspectable; incompatible graph kinds must fail explicitly instead of silently falling back
 - falsification stops at implied CI checks and graph sanity checks
 - stability is a bootstrap wrapper, not a self-compatibility framework
@@ -91,14 +99,14 @@ See [result-contract.md](/Users/observedobserver/Documents/GitHub/causal-lab/cau
 For method introspection, structured diagnostics, and configuration-level
 evidence, see the [Agent contract](agent-contract.md).
 
-Discovery outputs are mostly CPDAGs while the tasks accept only DAGs; see
+Discovery equivalence-class graphs need explicit resolution before DAG tasks; see
 [discovery-to-tasks.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/discovery-to-tasks.md)
 and `resolveDagForTasks()` for the explicit bridge.
 
 ## When Not To Use This Layer
 
-- when you need full ID or counterfactual identification
-- when your graph is PAG, MAG, or ADMG and you need theorem-level graph-analysis guarantees
+- when you need conditional-effect IDC or counterfactual identification
+- when your input is a PAG/MAG or selection diagram requiring a different identification procedure
 - when you need permutation-based falsification or multiple-testing corrected graph validation
 - when you need an estimator layer rather than identification-only output
 

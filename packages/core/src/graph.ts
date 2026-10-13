@@ -25,13 +25,16 @@ export class CausalGraph extends GraphIR {
   }
 
   static fromShape(shape: GraphShape): CausalGraph {
-    const graph = new CausalGraph(shape.nodes, {
-      kind: shape.kind ?? GRAPH_KIND.generic,
-      ...(shape.metadata !== undefined ? { metadata: shape.metadata } : {}),
+    // Share shape validation, including duplicate-pair/bow checks, with GraphIR.
+    const validated = GraphIR.fromShape(shape);
+    const metadata = validated.getMetadata();
+    const graph = new CausalGraph(validated.getNodes(), {
+      kind: validated.getKind(),
+      ...(metadata !== undefined ? { metadata } : {}),
       validate: false
     });
 
-    for (const edge of shape.edges) {
+    for (const edge of validated.getEdges()) {
       graph.setEdge(edge.node1, edge.node2, edge.endpoint1, edge.endpoint2, edge.metadata);
     }
 

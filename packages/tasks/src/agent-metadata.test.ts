@@ -61,7 +61,7 @@ describe("task agent metadata", () => {
     for (const descriptor of listIdentificationBackendDescriptors()) {
       expect(descriptor.agent.id).toBe(descriptor.id);
       const properties = descriptor.agent.inputSchema.properties as Record<string, { default?: number }>;
-      expect(properties.maxAdjustmentSets!.default).toBe(8);
+      expect(properties.maxAdjustmentSets!.default).toBe(descriptor.id === "id" ? undefined : 8);
       descriptor.agent.limitations.length = 0;
       expect(getIdentificationBackendDescriptor(descriptor.id).agent.limitations.length).toBeGreaterThan(0);
     }

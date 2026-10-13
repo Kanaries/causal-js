@@ -25,6 +25,19 @@ describe("published agent contracts", () => {
         expect(JSON.parse(JSON.stringify(result.agent))).toEqual(result.agent);
         expect(api.listTaskValidationEvidence().length).toBeGreaterThan(0);
       });
+      it(`preserves ADMG bows and ID through ${entry} (${format})`, async () => {
+        const filename = resolve(process.cwd(), "packages/causal/dist", `${entry}.${format === "esm" ? "js" : "cjs"}`);
+        const api = format === "esm" ? await import(pathToFileURL(filename).href) : require(filename);
+        const graph = api.CausalGraph.fromNodeIds(["X", "Y"], { kind: "admg" });
+        graph.addDirectedEdge("X", "Y");
+        graph.addBidirectedEdge("X", "Y");
+        expect(api.CausalGraph.deserialize(graph.serialize()).getEdges()).toHaveLength(2);
+        const result = api.identifyEffect({ graph: graph.toShape(), treatment: "X", outcome: "Y" });
+        expect(result).toMatchObject({ backend: "id", identifiable: false });
+        expect(result.witness.id.failure.graph.edges).toHaveLength(2);
+        expect(api.identifyById({ graph: graph.toShape(), treatment: [], outcome: ["Y"] }).identified).toBe(true);
+        expect(api.quotientNode(api.probabilityNode(["X", "Y"]), api.probabilityNode(["X"])).type).toBe("quotient");
+      });
     }
   }
 });

@@ -22,7 +22,7 @@ const nodeIds: Schema = { type: "array", items: { type: "string" }, uniqueItems:
 const endpoint: Schema = { enum: ["arrow", "circle", "none", "star", "tail"] };
 const graph: Schema = {
   type: "object",
-  description: "A serialized GraphShape. Structural validity and task-specific graph restrictions are checked at runtime.",
+  description: "A serialized GraphShape. ADMG edges may contain both a directed and a bidirected edge for the same node pair. Structural validity and task-specific graph restrictions are checked at runtime.",
   required: ["nodes", "edges"],
   properties: {
     version: { const: 1 },
@@ -121,12 +121,20 @@ function buildTaskMetadata(id: TaskId): AgentMethodMetadata {
       return { ...metadata, alternatives: ["findAdjustmentSets"], costProfile: "Graph reachability and separation checks for one candidate; cheaper than enumerating all subsets.", limitations: ["Structural validity only; no statistical diagnostics or effect estimation."] };
     }
     case "identifyEffect": {
-      const metadata = base(id, "Find a zero-effect, backdoor or core frontdoor formula within the selected DAG-first backend.", objectSchema({
+      const metadata = base(id, "Identify an intervention distribution with DAG witness rules or the complete ID backend on an observed DAG or ADMG.", objectSchema({
         ...graphQuery,
-        backend: { enum: ["auto", "dag-first-mvp", "dag-backdoor-only"], default: "auto" },
-        maxAdjustmentSets: { type: "integer", minimum: 0, default: 8, description: "Maximum returned adjustment candidates passed to the backend. JavaScript also accepts positive Infinity for an unbounded payload." }
+        backend: { enum: ["auto", "dag-first-mvp", "dag-backdoor-only", "id"], default: "auto", description: "auto keeps dag-first-mvp for DAGs and chooses id for ADMGs." },
+        maxAdjustmentSets: { type: "integer", minimum: 0, default: 8, description: "Maximum returned adjustment candidates for DAG witness backends; ignored by id. JavaScript also accepts positive Infinity for an unbounded payload." }
       }, queryRequired));
-      return { ...metadata, alternatives: ["findAdjustmentSets"], costProfile: "Adjustment and mediator searches may enumerate subsets; exponential in eligible variables.", limitations: ["General ID, ADMG/PAG identification and counterfactual identification are outside this API.", "A negative result means not identified by the selected rules; it is not a global non-identifiability proof.", "The returned formula still requires an estimator and statistical diagnostics."] };
+      return {
+        ...metadata,
+        assumptions: ["The supplied graph is the causal model being queried; computation does not establish its causal assumptions.", "The ID backend assumes an acyclic semi-Markovian model with observed explicit nodes and adequate support for probability ratios."],
+        preconditions: ["Use a DAG or ADMG; explicit latent nodes are supported only by the older DAG witness backends. ID expects latent confounding encoded by ADMG bidirected edges.", "Treatment and outcome must be distinct existing nodes; this task accepts singleton queries. Use identifyById for disjoint variable sets."],
+        failureModes: [{ code: "unsupported-graph-query", message: "The graph or query is outside the selected identification backend's contract.", recoveryHint: "Inspect the backend descriptor. ID accepts observed DAGs/ADMGs; the older witness backends accept DAGs. Resolve a CPDAG/PAG only under explicit causal assumptions.", alternatives: [] }],
+        alternatives: ["findAdjustmentSets"],
+        costProfile: "DAG witness searches may enumerate subsets. ID recursively computes ancestors and districts; expanded symbolic kernels can grow rapidly.",
+        limitations: ["PAG identification, conditional-effect IDC and counterfactual identification are outside this API.", "DAG witness failure means the selected rules found no solution. ID failure establishes non-identifiability relative to the supplied semi-Markovian graph and returns its failed recursive subproblem.", "The returned formula still requires an estimator and statistical diagnostics."]
+      };
     }
     case "falsifyGraph": {
       const metadata = base(id, "Inspect graph validity and test observable local Markov implications when data are supplied.", objectSchema({
@@ -182,14 +190,34 @@ export function taskInputSchema(id: TaskId): Schema {
 }
 
 export function getIdentificationBackendMetadata(id: IdentificationBackendId): AgentMethodMetadata {
-  if (id !== "dag-first-mvp" && id !== "dag-backdoor-only") throw new Error(`Unknown identification backend: ${id}`);
+  if (id !== "dag-first-mvp" && id !== "dag-backdoor-only" && id !== "id") throw new Error(`Unknown identification backend: ${id}`);
   const metadata = describeTask("identifyEffect");
+  if (id === "id") {
+    return {
+      ...metadata, id, kind: "identification-backend", apiStatus: "experimental",
+      summary: "Complete Shpitser–Pearl ID for an observed DAG or ADMG, including bows, from the observational joint distribution.",
+      inputSchema: objectSchema({ ...graphQuery, maxAdjustmentSets: { type: "integer", minimum: 0, description: "Accepted by the shared context but ignored: ID does not enumerate adjustment candidates." } }, queryRequired),
+      assumptions: ["An acyclic semi-Markovian structural causal model with observed explicit nodes and latent common causes represented by bidirected edges.", "The observational distribution has adequate support for every required conditional probability and denominator."],
+      preconditions: ["Use a DAG or ADMG with only measured nodes, directed edges and bidirected edges, and no directed cycles.", "The task backend takes distinct singleton treatment/outcome IDs; the public identifyById engine accepts disjoint variable sets."],
+      notRecommendedWhen: ["Do not pass a PAG/CPDAG, a selection diagram, explicit latent nodes or counterfactual queries.", "Do not treat structural identification as evidence for the graph or as a finite-sample effect estimate."],
+      failureModes: [
+        { code: "unsupported-id-input", message: "The graph or query is outside the ID input contract.", recoveryHint: "Supply an observed DAG/ADMG with directed acyclicity. Construct the intended latent projection explicitly; do not simply drop latent nodes.", alternatives: [] },
+        { code: "id-non-identifiable", message: "Step 5 found an unidentifiable recursive subproblem.", recoveryHint: "Inspect witness.id.failure and the trace; additional intervention data or justified causal assumptions are needed.", alternatives: [] }
+      ],
+      alternatives: ["dag-first-mvp"],
+      costProfile: "Recursive graph reductions and symbolic marginalization/factorization. Expanded expression size can grow rapidly; no truncation or silent search cutoff is applied.",
+      limitations: ["Implements unconditional intervention-distribution ID, not IDC or counterfactual identification.", "No automatic latent projection, positivity testing or numerical estimation is performed.", "Failure records the step-5 graph/district pair; it is not presented as a pair of pruned C-forests."]
+    };
+  }
   return {
     ...metadata, id, kind: "identification-backend",
     summary: id === "dag-first-mvp" ? "DAG zero-effect, backdoor and core frontdoor identification." : "DAG zero-effect and backdoor identification only.",
     inputSchema: objectSchema({ ...graphQuery, maxAdjustmentSets: { type: "integer", minimum: 0, default: 8, description: "JavaScript also accepts positive Infinity for an unbounded payload." } }, queryRequired),
+    assumptions: [...graphAssumptions], preconditions: [...graphPreconditions],
+    failureModes: [{ ...graphFailure, alternatives: [...graphFailure.alternatives] }],
     notRecommendedWhen: [...metadata.notRecommendedWhen, ...(id === "dag-backdoor-only" ? ["Use dag-first-mvp when a frontdoor strategy should also be searched."] : [])],
     alternatives: id === "dag-backdoor-only" ? ["dag-first-mvp"] : ["dag-backdoor-only"],
-    limitations: [...metadata.limitations, ...(id === "dag-backdoor-only" ? ["Frontdoor search is disabled."] : [])]
+    costProfile: "Witness searches may enumerate subsets of measured covariates. maxAdjustmentSets limits returned candidates, not enumeration cost.",
+    limitations: ["Only directed DAGs and singleton queries are supported.", "A negative result means the selected witness rules found no solution, not global non-identifiability.", "Use the id backend on an observed DAG or ADMG for complete ID.", ...(id === "dag-backdoor-only" ? ["Frontdoor search is disabled."] : [])]
   };
 }

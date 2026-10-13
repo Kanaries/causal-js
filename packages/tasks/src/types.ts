@@ -20,6 +20,7 @@ import type {
   PcOptions,
   RcdOptions
 } from "@causal-js/discovery";
+import type { IdFailureWitness, IdTraceStep } from "./id";
 
 export type DiscoveryAlgorithmId =
   | "pc"
@@ -145,14 +146,15 @@ export interface IsAdjustmentSetResult extends TaskResultBase {
   candidate: AdjustmentSetCandidate;
 }
 
-export type IdentificationMethod = "backdoor" | "frontdoor" | "zero-effect" | "non-identifiable";
+export type IdentificationMethod = "backdoor" | "frontdoor" | "zero-effect" | "id" | "non-identifiable";
 
 export type IdentificationEstimandFactorKind =
   | "zero"
   | "outcome-regression"
   | "covariate-distribution"
   | "mediator-distribution"
-  | "treatment-distribution";
+  | "treatment-distribution"
+  | "identified-kernel";
 
 export interface IdentificationEstimandFactor {
   kind: IdentificationEstimandFactorKind;
@@ -177,8 +179,15 @@ export type IdentificationExpressionNode =
     }
   | {
       type: "sum";
+      /** Variable identifiers, bound only inside this expression subtree. */
       variables: string[];
       expression: IdentificationExpressionNode;
+    }
+  | {
+      type: "quotient";
+      /** A kernel ratio on the support of its observational denominator. */
+      numerator: IdentificationExpressionNode;
+      denominator: IdentificationExpressionNode;
     };
 
 export interface IdentificationEstimandSpec {
@@ -191,7 +200,7 @@ export interface IdentificationEstimandSpec {
   factors: IdentificationEstimandFactor[];
 }
 
-export type IdentificationBackendId = "dag-first-mvp" | "dag-backdoor-only";
+export type IdentificationBackendId = "dag-first-mvp" | "dag-backdoor-only" | "id";
 export type IdentificationBackendPreference = "auto" | IdentificationBackendId;
 export type IdentificationBackendStatus = "available";
 export type IdentificationQueryShape = "singleton-treatment-singleton-outcome";
@@ -204,7 +213,9 @@ export interface IdentificationBackendDescriptor {
   graphKinds: GraphKind[];
   supportedMethods: Exclude<IdentificationMethod, "non-identifiable">[];
   queryShape: IdentificationQueryShape;
+  /** True if this backend is selected by auto for at least one graph kind. */
   defaultForAuto: boolean;
+  defaultForGraphKinds: GraphKind[];
   summary: string;
   limitations: string[];
 }
@@ -213,6 +224,7 @@ export type IdentificationDiagnosticStrategy =
   | "zero-effect"
   | "backdoor"
   | "frontdoor"
+  | "id"
   | "scope";
 
 export type IdentificationDiagnosticStatus =
@@ -231,6 +243,12 @@ export interface IdentificationDiagnostic {
 export interface IdentificationWitness {
   adjustmentSet?: string[];
   mediators?: string[];
+  /** Complete ID recursion; a failure contains the step-5 subproblem, not a pruned C-forest. */
+  id?: {
+    trace: IdTraceStep[];
+    topologicalOrder: string[];
+    failure?: IdFailureWitness;
+  };
 }
 
 export interface IdentificationBackendContext {

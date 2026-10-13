@@ -586,7 +586,7 @@ describe("task-oriented workflow", () => {
   });
 
   it("resolves and runs identification backends through the registry contract", () => {
-    expect(listIdentificationBackends()).toEqual(["dag-first-mvp", "dag-backdoor-only"]);
+    expect(listIdentificationBackends()).toEqual(["dag-first-mvp", "dag-backdoor-only", "id"]);
     expect(listIdentificationBackendDescriptors()).toMatchObject([
       {
         id: "dag-first-mvp",
@@ -609,6 +609,12 @@ describe("task-oriented workflow", () => {
         defaultForAuto: false,
         summary: expect.stringContaining("backdoor"),
         limitations: expect.any(Array)
+      },
+      {
+        id: "id",
+        graphKinds: ["dag", "admg"],
+        supportedMethods: ["id"],
+        defaultForAuto: true
       }
     ]);
     expect(getIdentificationBackendDescriptor("dag-first-mvp")).toMatchObject({
@@ -619,7 +625,8 @@ describe("task-oriented workflow", () => {
       id: "dag-backdoor-only",
       defaultForAuto: false
     });
-    expect(listIdentificationBackendsForGraphKind("dag")).toEqual(["dag-first-mvp", "dag-backdoor-only"]);
+    expect(listIdentificationBackendsForGraphKind("dag")).toEqual(["dag-first-mvp", "dag-backdoor-only", "id"]);
+    expect(listIdentificationBackendsForGraphKind("admg")).toEqual(["id"]);
     expect(listIdentificationBackendsForGraphKind("cpdag")).toEqual([]);
     expect(supportsIdentificationBackendGraphKind("dag-first-mvp", "dag")).toBe(true);
     expect(supportsIdentificationBackendGraphKind("dag-first-mvp", "cpdag")).toBe(false);

@@ -94,6 +94,13 @@ console.log(result.estimandSpec?.expression);
 console.log(result.backend);
 ```
 
+Complete ID is also available with `backend: "id"` on an observed DAG or ADMG.
+ADMGs support bows (a directed and a bidirected edge on the same pair); `auto`
+selects ID for ADMG inputs. `identifyById()` accepts joint treatment/outcome
+sets. Results include an expression AST with quotients or an explicit recursive
+failure witness. See `docs/tasks/id-identification.md` and
+`examples/id-identification.ts` for scope, support assumptions, and validation.
+
 For Agent integrations, `describeAlgorithm()` and `describeTask()` expose method
 metadata and JavaScript input schemas. All six task APIs add `result.agent` with
 structured diagnostics, degradations, next actions, configuration provenance,

@@ -36,6 +36,14 @@ export const GRAPH_EDGE_PATTERN = {
 export type EdgeEndpoint = (typeof EDGE_ENDPOINT)[keyof typeof EDGE_ENDPOINT];
 export type GraphKind = (typeof GRAPH_KIND)[keyof typeof GRAPH_KIND];
 export type GraphEdgePattern = (typeof GRAPH_EDGE_PATTERN)[keyof typeof GRAPH_EDGE_PATTERN];
+export type AdmgEdgeType = "directed" | "bidirected";
+
+export interface AdmgAdjacencyMatrices {
+  /** Entry [i][j] is 1 exactly when node i points to node j. */
+  directed: number[][];
+  /** Symmetric entries are 1 exactly when a bidirected edge is present. */
+  bidirected: number[][];
+}
 
 export const NODE_TYPE = {
   error: "error",
@@ -204,7 +212,7 @@ function cloneEdge(edge: EdgeDescriptor): EdgeDescriptor {
 }
 
 function canonicalEdgeKey(node1: string, node2: string): string {
-  return node1 < node2 ? `${node1}::${node2}` : `${node2}::${node1}`;
+  return JSON.stringify(node1 < node2 ? [node1, node2] : [node2, node1]);
 }
 
 function endpointToCode(endpoint: EdgeEndpoint): number {
@@ -321,6 +329,9 @@ export class GraphIR {
   private readonly nodes: InternalNode[] = [];
   private readonly nodeIndexById = new Map<string, number>();
   private readonly edgeMetadata = new Map<string, GraphMetadata>();
+  // Only bows need a second edge. The primary matrix keeps its original
+  // single-edge semantics everywhere else, including PAG orientation rules.
+  private readonly bowBidirectedEdges = new Map<string, EdgeDescriptor>();
   private adjacency: EdgeEndpoint[][] = [];
   private kind: GraphKind;
   private metadata: GraphMetadata | undefined;
@@ -366,7 +377,18 @@ export class GraphIR {
       validate: false
     });
 
+    const seenEdges = new Map<string, Set<GraphEdgePattern>>();
     for (const edge of shape.edges) {
+      const key = canonicalEdgeKey(edge.node1, edge.node2);
+      const pattern = classifyEdge(edge.endpoint1, edge.endpoint2);
+      const seen = seenEdges.get(key) ?? new Set<GraphEdgePattern>();
+      if (seen.size > 0 && (graph.kind !== GRAPH_KIND.admg || seen.has(pattern) ||
+        [...seen].some((existing) => existing !== GRAPH_EDGE_PATTERN.directed && existing !== GRAPH_EDGE_PATTERN.bidirected) ||
+        (pattern !== GRAPH_EDGE_PATTERN.directed && pattern !== GRAPH_EDGE_PATTERN.bidirected))) {
+        throw new Error(`Duplicate edges between ${edge.node1} and ${edge.node2}; only an ADMG directed/bidirected bow is supported.`);
+      }
+      seen.add(pattern);
+      seenEdges.set(key, seen);
       graph.setEdge(edge.node1, edge.node2, edge.endpoint1, edge.endpoint2, edge.metadata);
     }
 
@@ -392,6 +414,9 @@ export class GraphIR {
   }
 
   setKind(kind: GraphKind): this {
+    if (kind !== GRAPH_KIND.admg && this.bowBidirectedEdges.size > 0) {
+      throw new Error(`Graph kind ${kind} cannot represent ADMG bows; remove one edge type explicitly first.`);
+    }
     const previousKind = this.kind;
     this.kind = kind;
 
@@ -448,16 +473,15 @@ export class GraphIR {
       this.nodeIndexById.set(this.nodes[nodeIndex]!.id, nodeIndex);
     }
 
-    // Exact endpoint comparison: substring matching would cross-delete when
-    // node ids overlap as suffixes/prefixes (e.g. removing "B" hitting
-    // "AB::C"). Node ids containing "::" are ambiguous in canonicalEdgeKey
-    // itself (pre-existing limitation).
     for (const key of [...this.edgeMetadata.keys()]) {
-      const separatorIndex = key.indexOf("::");
-      const left = key.slice(0, separatorIndex);
-      const right = key.slice(separatorIndex + 2);
+      const [left, right] = JSON.parse(key) as [string, string];
       if (left === nodeId || right === nodeId) {
         this.edgeMetadata.delete(key);
+      }
+    }
+    for (const [key, edge] of this.bowBidirectedEdges) {
+      if (edge.node1 === nodeId || edge.node2 === nodeId) {
+        this.bowBidirectedEdges.delete(key);
       }
     }
 
@@ -500,9 +524,17 @@ export class GraphIR {
     return this.nodeIndexById.has(nodeId);
   }
 
-  getEndpoint(node1: string, node2: string): EdgeEndpoint {
+  getEndpoint(node1: string, node2: string, edgeType?: AdmgEdgeType): EdgeEndpoint {
     const [index1, index2] = this.getPairIndices(node1, node2);
-    return this.getAdjacencyEndpoint(index1, index2);
+    const bow = this.bowBidirectedEdges.size > 0 && this.bowBidirectedEdges.has(canonicalEdgeKey(node1, node2));
+    if (bow && edgeType === undefined) {
+      throw new Error(`Ambiguous ADMG bow between ${node1} and ${node2}; specify directed or bidirected, or use getEdgesBetween().`);
+    }
+    if (bow && edgeType === "bidirected") return EDGE_ENDPOINT.arrow;
+    const endpoint1 = this.getAdjacencyEndpoint(index1, index2);
+    const endpoint2 = this.getAdjacencyEndpoint(index2, index1);
+    return edgeType === undefined || validateEndpointPair(endpoint1, endpoint2) === edgeType
+      ? endpoint1 : EDGE_ENDPOINT.none;
   }
 
   setEdge(
@@ -529,25 +561,60 @@ export class GraphIR {
     }
 
     const [index1, index2] = this.getPairIndices(node1, node2);
+    const key = canonicalEdgeKey(node1, node2);
+    const previous = this.kind === GRAPH_KIND.admg ? this.getPrimaryEdge(node1, node2) : undefined;
+    const previousBow = this.bowBidirectedEdges.get(key);
+    if (this.kind === GRAPH_KIND.admg && pattern === GRAPH_EDGE_PATTERN.bidirected &&
+      previous !== undefined && classifyEdge(previous.endpoint1, previous.endpoint2) === GRAPH_EDGE_PATTERN.directed) {
+      const edge: EdgeDescriptor = { node1, node2, endpoint1, endpoint2 };
+      const preserved = metadata ?? previousBow?.metadata;
+      if (preserved !== undefined) edge.metadata = cloneMetadata(preserved)!;
+      this.bowBidirectedEdges.set(key, edge);
+      return this;
+    }
+    if (this.kind === GRAPH_KIND.admg && pattern === GRAPH_EDGE_PATTERN.directed &&
+      previous !== undefined && classifyEdge(previous.endpoint1, previous.endpoint2) === GRAPH_EDGE_PATTERN.bidirected) {
+      this.bowBidirectedEdges.set(key, previous);
+      // Metadata belongs to an edge type, not the node pair.
+      this.edgeMetadata.delete(key);
+    }
     this.adjacency[index1]![index2] = endpoint1;
     this.adjacency[index2]![index1] = endpoint2;
 
-    const key = canonicalEdgeKey(node1, node2);
     if (pattern === GRAPH_EDGE_PATTERN.absent) {
       this.edgeMetadata.delete(key);
+      this.bowBidirectedEdges.delete(key);
     } else if (metadata !== undefined) {
       this.edgeMetadata.set(key, cloneMetadata(metadata)!);
+    }
+
+    // ADMG means acyclic directed mixed graph, including during mutation.
+    if (this.kind === GRAPH_KIND.admg && pattern === GRAPH_EDGE_PATTERN.directed && this.hasDirectedCycle()) {
+      this.adjacency[index1]![index2] = previous?.endpoint1 ?? EDGE_ENDPOINT.none;
+      this.adjacency[index2]![index1] = previous?.endpoint2 ?? EDGE_ENDPOINT.none;
+      if (previous?.metadata === undefined) this.edgeMetadata.delete(key);
+      else this.edgeMetadata.set(key, previous.metadata);
+      if (previousBow === undefined) this.bowBidirectedEdges.delete(key);
+      else this.bowBidirectedEdges.set(key, previousBow);
+      throw new Error("Graph kind admg does not allow directed cycles.");
     }
 
     return this;
   }
 
-  setEdgeMetadata(node1: string, node2: string, metadata?: GraphMetadata): this {
-    if (!this.isAdjacentTo(node1, node2)) {
+  setEdgeMetadata(node1: string, node2: string, metadata?: GraphMetadata, edgeType?: AdmgEdgeType): this {
+    const edge = this.getEdge(node1, node2, edgeType);
+    if (!edge) {
       throw new Error(`Cannot attach metadata to a missing edge: ${node1}-${node2}`);
     }
 
     const key = canonicalEdgeKey(node1, node2);
+    const bow = this.bowBidirectedEdges.get(key);
+    if (bow !== undefined && edgeType === "bidirected") {
+      if (metadata === undefined) delete bow.metadata;
+      else bow.metadata = cloneMetadata(metadata)!;
+      return this;
+    }
     if (metadata === undefined) {
       this.edgeMetadata.delete(key);
     } else {
@@ -557,14 +624,11 @@ export class GraphIR {
     return this;
   }
 
-  getEdgeMetadata(node1: string, node2: string): GraphMetadata | undefined {
-    if (!this.isAdjacentTo(node1, node2)) {
-      return undefined;
-    }
-
-    return cloneMetadata(this.edgeMetadata.get(canonicalEdgeKey(node1, node2)));
+  getEdgeMetadata(node1: string, node2: string, edgeType?: AdmgEdgeType): GraphMetadata | undefined {
+    return this.getEdge(node1, node2, edgeType)?.metadata;
   }
 
+  /** Remove every edge between this pair; use typed removals to preserve a bow's other edge. */
   removeEdge(node1: string, node2: string): this {
     return this.setEdge(node1, node2, EDGE_ENDPOINT.none, EDGE_ENDPOINT.none);
   }
@@ -574,6 +638,7 @@ export class GraphIR {
       Array.from({ length: this.nodes.length }, () => EDGE_ENDPOINT.none)
     );
     this.edgeMetadata.clear();
+    this.bowBidirectedEdges.clear();
     return this;
   }
 
@@ -602,16 +667,18 @@ export class GraphIR {
   }
 
   isAdjacentTo(node1: string, node2: string): boolean {
+    const [index1, index2] = this.getPairIndices(node1, node2);
     return (
-      this.getEndpoint(node1, node2) !== EDGE_ENDPOINT.none ||
-      this.getEndpoint(node2, node1) !== EDGE_ENDPOINT.none
+      this.getAdjacencyEndpoint(index1, index2) !== EDGE_ENDPOINT.none ||
+      this.getAdjacencyEndpoint(index2, index1) !== EDGE_ENDPOINT.none
     );
   }
 
   isParentOf(parent: string, child: string): boolean {
+    const [index1, index2] = this.getPairIndices(parent, child);
     return (
-      this.getEndpoint(parent, child) === EDGE_ENDPOINT.tail &&
-      this.getEndpoint(child, parent) === EDGE_ENDPOINT.arrow
+      this.getAdjacencyEndpoint(index1, index2) === EDGE_ENDPOINT.tail &&
+      this.getAdjacencyEndpoint(index2, index1) === EDGE_ENDPOINT.arrow
     );
   }
 
@@ -628,6 +695,7 @@ export class GraphIR {
   }
 
   isUndirectedFromTo(node1: string, node2: string): boolean {
+    if (this.kind === GRAPH_KIND.admg) return false;
     return (
       this.getEndpoint(node1, node2) === EDGE_ENDPOINT.tail &&
       this.getEndpoint(node2, node1) === EDGE_ENDPOINT.tail
@@ -635,13 +703,14 @@ export class GraphIR {
   }
 
   isBidirectedEdge(node1: string, node2: string): boolean {
-    return (
-      this.getEndpoint(node1, node2) === EDGE_ENDPOINT.arrow &&
-      this.getEndpoint(node2, node1) === EDGE_ENDPOINT.arrow
-    );
+    const [index1, index2] = this.getPairIndices(node1, node2);
+    return (this.bowBidirectedEdges.size > 0 && this.bowBidirectedEdges.has(canonicalEdgeKey(node1, node2))) ||
+      (this.getAdjacencyEndpoint(index1, index2) === EDGE_ENDPOINT.arrow &&
+        this.getAdjacencyEndpoint(index2, index1) === EDGE_ENDPOINT.arrow);
   }
 
   isCircleEdge(node1: string, node2: string): boolean {
+    if (this.kind === GRAPH_KIND.admg) return false;
     return (
       this.getEndpoint(node1, node2) === EDGE_ENDPOINT.circle &&
       this.getEndpoint(node2, node1) === EDGE_ENDPOINT.circle
@@ -649,6 +718,7 @@ export class GraphIR {
   }
 
   isPartiallyOrientedEdge(node1: string, node2: string): boolean {
+    if (this.kind === GRAPH_KIND.admg) return false;
     const forward = this.getEndpoint(node1, node2);
     const reverse = this.getEndpoint(node2, node1);
     return (
@@ -658,6 +728,7 @@ export class GraphIR {
   }
 
   isPartiallyUndirectedEdge(node1: string, node2: string): boolean {
+    if (this.kind === GRAPH_KIND.admg) return false;
     const forward = this.getEndpoint(node1, node2);
     const reverse = this.getEndpoint(node2, node1);
     return (
@@ -672,7 +743,7 @@ export class GraphIR {
 
     while (stack.length > 0) {
       const current = stack.pop();
-      if (!current) {
+      if (current === undefined) {
         continue;
       }
 
@@ -759,7 +830,7 @@ export class GraphIR {
 
   getNodeIdsInto(nodeId: string, endpoint: EdgeEndpoint): string[] {
     return this.getAdjacentNodeIds(nodeId).filter((candidate) => {
-      return this.getEndpoint(nodeId, candidate) === endpoint;
+      return this.getEdgesBetween(nodeId, candidate).some((edge) => edge.endpoint1 === endpoint);
     });
   }
 
@@ -769,7 +840,7 @@ export class GraphIR {
 
   getNodeIdsOutOf(nodeId: string, endpoint: EdgeEndpoint): string[] {
     return this.getAdjacentNodeIds(nodeId).filter((candidate) => {
-      return this.getEndpoint(candidate, nodeId) === endpoint;
+      return this.getEdgesBetween(nodeId, candidate).some((edge) => edge.endpoint2 === endpoint);
     });
   }
 
@@ -783,7 +854,7 @@ export class GraphIR {
 
     while (stack.length > 0) {
       const nodeId = stack.pop();
-      if (!nodeId) {
+      if (nodeId === undefined) {
         continue;
       }
 
@@ -808,7 +879,7 @@ export class GraphIR {
 
     while (stack.length > 0) {
       const nodeId = stack.pop();
-      if (!nodeId) {
+      if (nodeId === undefined) {
         continue;
       }
 
@@ -823,7 +894,82 @@ export class GraphIR {
     return [...visited];
   }
 
-  getEdge(node1: string, node2: string): EdgeDescriptor | undefined {
+  /** A bow has two edges: choose a type or use getEdgesBetween. */
+  getEdge(node1: string, node2: string, edgeType?: AdmgEdgeType): EdgeDescriptor | undefined {
+    const edges = this.getEdgesBetween(node1, node2).filter((edge) =>
+      edgeType === undefined || classifyEdge(edge.endpoint1, edge.endpoint2) === edgeType);
+    if (edges.length > 1) {
+      throw new Error(`Ambiguous ADMG bow between ${node1} and ${node2}; specify directed or bidirected, or use getEdgesBetween().`);
+    }
+    return edges[0];
+  }
+
+  /** Edges use the requested node order; a bow returns directed then bidirected. */
+  getEdgesBetween(node1: string, node2: string): EdgeDescriptor[] {
+    const primary = this.getPrimaryEdge(node1, node2);
+    if (!primary) return [];
+    if (this.bowBidirectedEdges.size === 0) return [primary];
+    const bow = this.bowBidirectedEdges.get(canonicalEdgeKey(node1, node2));
+    if (!bow) return [primary];
+    return [primary, {
+      node1, node2, endpoint1: EDGE_ENDPOINT.arrow, endpoint2: EDGE_ENDPOINT.arrow,
+      ...(bow.metadata !== undefined ? { metadata: cloneMetadata(bow.metadata)! } : {})
+    }];
+  }
+
+  getDirectedEdge(from: string, to: string): EdgeDescriptor | undefined {
+    const edge = this.getEdge(from, to, "directed");
+    return edge?.endpoint1 === EDGE_ENDPOINT.tail ? edge : undefined;
+  }
+
+  getBidirectedEdge(node1: string, node2: string): EdgeDescriptor | undefined {
+    return this.getEdge(node1, node2, "bidirected");
+  }
+
+  removeDirectedEdge(from: string, to: string): this {
+    this.getPairIndices(from, to);
+    if (!this.getDirectedEdge(from, to)) return this;
+    const bidirected = this.getBidirectedEdge(from, to);
+    this.removeEdge(from, to);
+    if (bidirected) this.addBidirectedEdge(from, to, bidirected.metadata);
+    return this;
+  }
+
+  removeBidirectedEdge(node1: string, node2: string): this {
+    this.getPairIndices(node1, node2);
+    const key = canonicalEdgeKey(node1, node2);
+    if (this.bowBidirectedEdges.delete(key)) return this;
+    if (this.getBidirectedEdge(node1, node2)) this.removeEdge(node1, node2);
+    return this;
+  }
+
+  /** Maximal bidirected-connected components, including singleton districts. */
+  getDistricts(): string[][] {
+    if (this.kind !== GRAPH_KIND.admg && this.kind !== GRAPH_KIND.dag) {
+      throw new Error("Districts require a DAG or ADMG.");
+    }
+    const visited = new Set<string>();
+    const districts: string[][] = [];
+    const nodeIds = this.getNodeIds();
+    for (const node of nodeIds) {
+      if (visited.has(node)) continue;
+      const component = new Set<string>([node]);
+      const queue = [node];
+      visited.add(node);
+      while (queue.length > 0) {
+        for (const spouse of this.getSpouseIds(queue.shift()!)) {
+          if (visited.has(spouse)) continue;
+          visited.add(spouse);
+          component.add(spouse);
+          queue.push(spouse);
+        }
+      }
+      districts.push(nodeIds.filter((id) => component.has(id)));
+    }
+    return districts;
+  }
+
+  private getPrimaryEdge(node1: string, node2: string): EdgeDescriptor | undefined {
     if (!this.hasNode(node1) || !this.hasNode(node2)) {
       return undefined;
     }
@@ -835,11 +981,11 @@ export class GraphIR {
     const edge: EdgeDescriptor = {
       node1,
       node2,
-      endpoint1: this.getEndpoint(node1, node2),
-      endpoint2: this.getEndpoint(node2, node1)
+      endpoint1: this.getAdjacencyEndpoint(this.getNodeIndex(node1), this.getNodeIndex(node2)),
+      endpoint2: this.getAdjacencyEndpoint(this.getNodeIndex(node2), this.getNodeIndex(node1))
     };
 
-    const metadata = this.getEdgeMetadata(node1, node2);
+    const metadata = cloneMetadata(this.edgeMetadata.get(canonicalEdgeKey(node1, node2)));
     if (metadata !== undefined) {
       edge.metadata = metadata;
     }
@@ -851,26 +997,7 @@ export class GraphIR {
     const edges: EdgeDescriptor[] = [];
     for (let index1 = 0; index1 < this.nodes.length; index1 += 1) {
       for (let index2 = index1 + 1; index2 < this.nodes.length; index2 += 1) {
-        const endpoint1 = this.getAdjacencyEndpoint(index1, index2);
-        const endpoint2 = this.getAdjacencyEndpoint(index2, index1);
-
-        if (endpoint1 === EDGE_ENDPOINT.none && endpoint2 === EDGE_ENDPOINT.none) {
-          continue;
-        }
-
-        const edge: EdgeDescriptor = {
-          node1: this.getNodeAt(index1).id,
-          node2: this.getNodeAt(index2).id,
-          endpoint1,
-          endpoint2
-        };
-
-        const metadata = this.getEdgeMetadata(edge.node1, edge.node2);
-        if (metadata !== undefined) {
-          edge.metadata = metadata;
-        }
-
-        edges.push(edge);
+        edges.push(...this.getEdgesBetween(this.getNodeAt(index1).id, this.getNodeAt(index2).id));
       }
     }
 
@@ -878,6 +1005,9 @@ export class GraphIR {
   }
 
   toLegacyShape(): LegacyGraphShape {
+    if (this.bowBidirectedEdges.size > 0) {
+      throw new Error("Legacy graph shapes cannot represent ADMG bows; use toShape() to retain graph kind and both edge types.");
+    }
     return {
       nodes: this.getNodes().map((node) => {
         const legacy: GraphNode = { id: node.id };
@@ -950,7 +1080,20 @@ export class GraphIR {
   }
 
   getAdjacencyMatrix(): number[][] {
+    if (this.bowBidirectedEdges.size > 0) {
+      throw new Error("A single endpoint matrix cannot represent ADMG bows; use getAdmgAdjacencyMatrices().");
+    }
     return this.adjacency.map((row) => row.map(endpointToCode));
+  }
+
+  getAdmgAdjacencyMatrices(): AdmgAdjacencyMatrices {
+    if (this.kind !== GRAPH_KIND.admg && this.kind !== GRAPH_KIND.dag) {
+      throw new Error("ADMG adjacency matrices require a DAG or ADMG.");
+    }
+    return {
+      directed: this.nodes.map((from) => this.nodes.map((to) => Number(this.isParentOf(from.id, to.id)))),
+      bidirected: this.nodes.map((from) => this.nodes.map((to) => Number(this.isBidirectedEdge(from.id, to.id))))
+    };
   }
 
   getDegree(nodeId: string): number {
@@ -958,6 +1101,8 @@ export class GraphIR {
   }
 
   getIndegree(nodeId: string): number {
+    // For ADMGs, degree in the directed layer excludes latent-confounding edges.
+    if (this.kind === GRAPH_KIND.admg) return this.getParentIds(nodeId).length;
     return this.getAdjacentNodeIds(nodeId).filter((candidate) => {
       const endpoint = this.getEndpoint(candidate, nodeId);
       return endpoint === EDGE_ENDPOINT.arrow;
@@ -965,6 +1110,7 @@ export class GraphIR {
   }
 
   getOutdegree(nodeId: string): number {
+    if (this.kind === GRAPH_KIND.admg) return this.getChildIds(nodeId).length;
     return this.getAdjacentNodeIds(nodeId).filter((candidate) => {
       const endpoint = this.getEndpoint(nodeId, candidate);
       return endpoint === EDGE_ENDPOINT.tail || endpoint === EDGE_ENDPOINT.circle;
@@ -996,7 +1142,9 @@ export class GraphIR {
 
     for (let rowIndex = 0; rowIndex < this.size; rowIndex += 1) {
       for (let columnIndex = 0; columnIndex < this.size; columnIndex += 1) {
-        if (this.getAdjacencyEndpoint(rowIndex, columnIndex) === EDGE_ENDPOINT.arrow) {
+        if (this.getAdjacencyEndpoint(rowIndex, columnIndex) === EDGE_ENDPOINT.arrow ||
+          (this.bowBidirectedEdges.size > 0 && this.bowBidirectedEdges.has(
+            canonicalEdgeKey(this.getNodeIdAt(rowIndex), this.getNodeIdAt(columnIndex))))) {
           pairs.push([columnIndex, rowIndex]);
         }
       }
@@ -1020,7 +1168,13 @@ export class GraphIR {
   }
 
   findAdjacencies(): IndexPair[] {
-    return [...this.findTails(), ...this.findArrowHeads()];
+    const seen = new Set<string>();
+    return [...this.findTails(), ...this.findArrowHeads()].filter(([from, to]) => {
+      const key = `${from}:${to}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   }
 
   isUndirected(index1: number, index2: number): boolean {
@@ -1118,15 +1272,24 @@ export class GraphIR {
   reorientAllWith(endpoint: EdgeEndpoint): this {
     assertEndpoint(endpoint);
 
+    if (this.bowBidirectedEdges.size > 0) {
+      throw new Error("Reorienting ADMG bows would collapse two edge types; remove one edge type explicitly first.");
+    }
+
+    if (!allowsPattern(this.kind, validateEndpointPair(endpoint, endpoint))) {
+      throw new Error(`Graph kind ${this.kind} does not allow uniform ${endpoint} endpoints.`);
+    }
+
     for (const edge of this.getEdges()) {
-      this.setEdge(edge.node1, edge.node2, endpoint, endpoint);
+      if (this.kind === GRAPH_KIND.admg) this.removeEdge(edge.node1, edge.node2);
+      this.setEdge(edge.node1, edge.node2, endpoint, endpoint, edge.metadata);
     }
 
     return this;
   }
 
   topologicalOrder(): string[] {
-    if (this.kind !== GRAPH_KIND.dag && this.kind !== GRAPH_KIND.generic) {
+    if (this.kind !== GRAPH_KIND.dag && this.kind !== GRAPH_KIND.generic && this.kind !== GRAPH_KIND.admg) {
       throw new Error(`Topological order is only defined for DAG-like graphs, received ${this.kind}.`);
     }
 
@@ -1134,7 +1297,11 @@ export class GraphIR {
   }
 
   topologicalOrderIndices(): number[] {
-    if (this.getEdges().some((edge) => classifyEdge(edge.endpoint1, edge.endpoint2) !== GRAPH_EDGE_PATTERN.directed)) {
+    if (this.getEdges().some((edge) => {
+      const pattern = classifyEdge(edge.endpoint1, edge.endpoint2);
+      return pattern !== GRAPH_EDGE_PATTERN.directed &&
+        !(this.kind === GRAPH_KIND.admg && pattern === GRAPH_EDGE_PATTERN.bidirected);
+    })) {
       throw new Error("Topological order requires a directed acyclic graph.");
     }
 
@@ -1290,7 +1457,7 @@ export class GraphIR {
   private canTraverseSemiDirected(fromIndex: number, toIndex: number): boolean {
     const fromId = this.getNodeIdAt(fromIndex);
     const toId = this.getNodeIdAt(toIndex);
-    return this.isAdjacentTo(fromId, toId) && this.getEndpoint(fromId, toId) !== EDGE_ENDPOINT.arrow;
+    return this.getEdgesBetween(fromId, toId).some((edge) => edge.endpoint1 !== EDGE_ENDPOINT.arrow);
   }
 
   private getPairIndices(node1: string, node2: string): [number, number] {

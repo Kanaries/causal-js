@@ -109,8 +109,10 @@ statistical computation does not establish the underlying causal assumptions.
 `degradations` records incomplete adjustment search, truncated payloads,
 unavailable preferred graph artifacts, unsupported statistical checks, and
 inconclusive CI tests where relevant. `nextActions` gives prioritized follow-up
-guidance. A negative identification result means the selected backend's rules
-did not identify the effect; it is not a general non-identifiability proof.
+guidance. A negative result from a DAG witness backend means its selected rules
+did not identify the effect. The complete `id` backend instead reports its
+non-identifiability criterion and recursive failure witness; this conclusion is
+relative to the supplied semi-Markovian graph. See [complete ID](id-identification.md).
 
 Falsification treats non-finite or out-of-range p-values as inconclusive. When
 there are no conclusive CI tests, `overallSummary.falsified` is `null`. If some
@@ -164,19 +166,24 @@ same options.
 
 ### Initial Built-in Evidence
 
-The initial manifest contains five analytical records for the fully observed
+The manifest retains five analytical records for the fully observed
 three-node confounder DAG `Z → X`, `Z → Y`, `X → Y`:
 
 - Full adjustment enumeration, with the hand-derived candidate `{Z}`.
 - Validity checks for the empty candidate and `{Z}`.
-- Both identification backends with default candidate limits, checking the
+- Both DAG witness backends with default candidate limits, checking the
   returned backdoor expression against an independently enumerated binary SCM's
   intervention distribution.
 
+Three further analytical records cover complete ID on that DAG confounder,
+the ADMG frontdoor model and the non-identifiable bow. Their independently
+enumerated SCM tests validate the `identifiable` and `estimandSpec` outputs;
+trace and witness fields are not automatically covered.
+
 These records live in `packages/tasks/src/validation-evidence.ts` and are
-exercised by `packages/tasks/src/validation-evidence.test.ts`. Frontdoor,
-zero-effect, other configurations, discovery, falsification, and stability do
-not inherit those records. Existing unit suites and external parity reports are
+exercised by `packages/tasks/src/validation-evidence.test.ts`. The older DAG
+frontdoor and zero-effect paths, other configurations, discovery, falsification,
+and stability do not inherit those records. Existing unit suites and external parity reports are
 not automatically promoted to configuration coverage. Artifact paths point to
 repository tests; runtime evaluation never loads those files.
 

@@ -3,6 +3,7 @@ import type { GraphKind } from "@causal-js/core";
 
 import { runDagBackdoorOnlyIdentificationBackend, runDagFirstIdentificationBackend } from "./identify-backend";
 import { getIdentificationBackendMetadata } from "./agent-metadata";
+import { runIdIdentificationBackend } from "./id-backend";
 import type {
   IdentificationBackendContext,
   IdentificationBackendDescriptor,
@@ -29,6 +30,7 @@ const IDENTIFICATION_BACKEND_REGISTRY: Record<IdentificationBackendId, Identific
       supportedMethods: ["zero-effect", "backdoor", "frontdoor"],
       queryShape: "singleton-treatment-singleton-outcome",
       defaultForAuto: true,
+      defaultForGraphKinds: [GRAPH_KIND.dag],
       summary: "Searches DAG-first zero-effect, backdoor, and core frontdoor witnesses.",
       limitations: [
         "Only DAG graphs are supported in this step.",
@@ -48,6 +50,7 @@ const IDENTIFICATION_BACKEND_REGISTRY: Record<IdentificationBackendId, Identific
       supportedMethods: ["zero-effect", "backdoor"],
       queryShape: "singleton-treatment-singleton-outcome",
       defaultForAuto: false,
+      defaultForGraphKinds: [],
       summary: "Searches DAG zero-effect and backdoor witnesses but intentionally skips frontdoor.",
       limitations: [
         "Only DAG graphs are supported in this step.",
@@ -57,6 +60,27 @@ const IDENTIFICATION_BACKEND_REGISTRY: Record<IdentificationBackendId, Identific
       ]
     },
     runner: runDagBackdoorOnlyIdentificationBackend
+  },
+  id: {
+    descriptor: {
+      id: "id",
+      label: "Complete ID",
+      status: "available",
+      agent: getIdentificationBackendMetadata("id"),
+      graphKinds: [GRAPH_KIND.dag, GRAPH_KIND.admg],
+      supportedMethods: ["id"],
+      queryShape: "singleton-treatment-singleton-outcome",
+      defaultForAuto: true,
+      defaultForGraphKinds: [GRAPH_KIND.admg],
+      summary: "Complete ID identification from the observational joint distribution on an observed DAG or ADMG, including bows.",
+      limitations: [
+        "Every explicit node must be observed; represent latent common causes with bidirected edges in an ADMG.",
+        "The task interface accepts singleton queries; identifyById accepts disjoint variable sets.",
+        "Conditional effects (IDC), counterfactuals, selection diagrams, and PAG identification are outside this backend.",
+        "The returned symbolic kernel still requires statistical estimation and support checks."
+      ]
+    },
+    runner: runIdIdentificationBackend
   }
 };
 
@@ -72,7 +96,14 @@ export function supportsIdentificationBackendGraphKind(
   backend: IdentificationBackendId,
   graphKind: GraphKind
 ): boolean {
-  return IDENTIFICATION_BACKEND_REGISTRY[backend].descriptor.graphKinds.includes(graphKind);
+  return getRegistryEntry(backend).descriptor.graphKinds.includes(graphKind);
+}
+
+function getRegistryEntry(backend: IdentificationBackendId): IdentificationBackendRegistryEntry {
+  if (!Object.hasOwn(IDENTIFICATION_BACKEND_REGISTRY, backend)) {
+    throw new Error(`Unknown identification backend "${backend}".`);
+  }
+  return IDENTIFICATION_BACKEND_REGISTRY[backend];
 }
 
 export function listIdentificationBackendsForGraphKind(graphKind: GraphKind): IdentificationBackendId[] {
@@ -82,12 +113,14 @@ export function listIdentificationBackendsForGraphKind(graphKind: GraphKind): Id
 export function getIdentificationBackendDescriptor(
   backend: IdentificationBackendId
 ): IdentificationBackendDescriptor {
+  const { descriptor } = getRegistryEntry(backend);
   return {
-    ...IDENTIFICATION_BACKEND_REGISTRY[backend].descriptor,
+    ...descriptor,
     agent: getIdentificationBackendMetadata(backend),
-    graphKinds: [...IDENTIFICATION_BACKEND_REGISTRY[backend].descriptor.graphKinds],
-    supportedMethods: [...IDENTIFICATION_BACKEND_REGISTRY[backend].descriptor.supportedMethods],
-    limitations: [...IDENTIFICATION_BACKEND_REGISTRY[backend].descriptor.limitations]
+    graphKinds: [...descriptor.graphKinds],
+    defaultForGraphKinds: [...descriptor.defaultForGraphKinds],
+    supportedMethods: [...descriptor.supportedMethods],
+    limitations: [...descriptor.limitations]
   };
 }
 
@@ -103,7 +136,7 @@ export function resolveIdentificationBackend(
     const graphKind = context?.graph.kind ?? GRAPH_KIND.dag;
     const defaultBackend = IDENTIFICATION_BACKENDS.find((backend) => {
       const descriptor = IDENTIFICATION_BACKEND_REGISTRY[backend].descriptor;
-      return descriptor.defaultForAuto && supportsIdentificationBackendGraphKind(backend, graphKind);
+      return descriptor.defaultForGraphKinds.includes(graphKind) && supportsIdentificationBackendGraphKind(backend, graphKind);
     });
     if (defaultBackend !== undefined) {
       return defaultBackend;
@@ -112,6 +145,7 @@ export function resolveIdentificationBackend(
   }
 
   const explicitGraphKind = context?.graph.kind ?? GRAPH_KIND.dag;
+  getRegistryEntry(preference);
   if (context !== undefined && !supportsIdentificationBackendGraphKind(preference, explicitGraphKind)) {
     throw new Error(
       `Identification backend "${preference}" does not support graph kind "${explicitGraphKind}".`

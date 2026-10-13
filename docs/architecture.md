@@ -36,6 +36,11 @@ The graph layer should be treated as a stable intermediate representation:
 - explicit edge endpoints instead of string-composed edge labels
 - JSON-serializable graph/node/edge metadata
 - compatibility adapters for legacy graph shapes
+- ADMG bows retain directed and bidirected layers with independent metadata;
+  single-edge APIs reject ambiguity and legacy formats reject lossy conversion
+
+The task package's complete ID backend consumes this observed ADMG contract and
+produces scoped symbolic ASTs. See [complete ID](tasks/id-identification.md).
 
 ### `@causal-js/discovery`
 

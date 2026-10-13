@@ -9,14 +9,20 @@ export function identifyEffect(options: IdentifyEffectOptions): IdentifyEffectRe
   assertCountLimit(options.maxAdjustmentSets, "identifyEffect maxAdjustmentSets", true);
   const graph = asCausalGraph(options.graph);
   assertSingletonNodeQuery(options.treatment, options.outcome);
-  assertDagLike(graph);
+  if (graph.getKind() !== GRAPH_KIND.admg) {
+    if (graph.getKind() !== GRAPH_KIND.dag && graph.getKind() !== GRAPH_KIND.generic) {
+      throw new Error("identifyEffect supports DAG or ADMG inputs. Resolve an equivalence-class graph explicitly before identification.");
+    }
+    assertDagLike(graph);
+  }
 
-  // assertDagLike accepted the graph, so a "generic" kind is structurally a
+  // assertDagLike accepted any "generic" graph, so that kind is structurally a
   // DAG here; normalize it so backend resolution (registered for kind "dag")
   // matches — user-built {nodes, edges} shapes default to kind "generic".
   const graphShape = graph.toShape();
-  const backendGraphShape =
-    graphShape.kind === GRAPH_KIND.dag ? graphShape : { ...graphShape, kind: GRAPH_KIND.dag };
+  const backendGraphShape = graphShape.kind === GRAPH_KIND.generic
+    ? { ...graphShape, kind: GRAPH_KIND.dag }
+    : graphShape;
 
   const backendRun = runIdentificationBackend(
     {
@@ -31,6 +37,71 @@ export function identifyEffect(options: IdentifyEffectOptions): IdentifyEffectRe
   const backendDescriptor = getIdentificationBackendDescriptor(backend);
   const backendSummaryAssumption = `Uses the ${backendDescriptor.label} backend: ${backendDescriptor.summary}`;
   const backendLimitations = [...backendDescriptor.limitations];
+  if (backend === "id") {
+    const identified = evaluation.identified;
+    const witness = evaluation.witness ?? {};
+    const nextAction = identified
+      ? "Estimate the identified kernel and check support for every conditioning event and denominator."
+      : "Identification requires additional causal assumptions or interventional information beyond the supplied observational model.";
+    return {
+      task: "identifyEffect",
+      graph: graph.toShape(),
+      graphKind: backendGraphShape.kind ?? GRAPH_KIND.dag,
+      treatment: options.treatment,
+      outcome: options.outcome,
+      backend,
+      identifiable: identified,
+      method: identified ? "id" : "non-identifiable",
+      estimand: evaluation.estimandSpec?.expression ?? null,
+      estimandSpec: evaluation.estimandSpec ?? null,
+      witness,
+      diagnostics,
+      nextAction,
+      agent: createTaskAgent("identifyEffect", {
+        ...graphConfiguration(backendGraphShape),
+        queryShape: "singleton-treatment-singleton-outcome",
+        backend,
+        identificationMethod: identified ? "id" : "non-identifiable"
+      }, ["identifiable", "estimandSpec"], {
+        backend,
+        diagnostics: [
+          {
+            code: "identification_id",
+            status: identified ? "passed" : "failed",
+            severity: identified ? "info" : "warning",
+            message: diagnostics[0]!.summary,
+            details: {
+              conclusion: identified ? "identified" : "non-identifiable-in-supplied-model",
+              trace: (witness.id?.trace ?? []).map((step) => ({ ...step })),
+              ...(witness.id?.failure ? {
+                failureGraphNodes: witness.id.failure.graph.nodes.map((node) => node.id),
+                failureDistrictNodes: witness.id.failure.district.nodes.map((node) => node.id)
+              } : {})
+            }
+          },
+          { code: "identification_support", status: "not_run", severity: "warning", message: "The symbolic ID calculation does not check positivity or estimate denominators from data." },
+          ...(options.maxAdjustmentSets !== undefined ? [{
+            code: "id_adjustment_limit_not_applicable",
+            status: "not_applicable" as const,
+            severity: "info" as const,
+            message: "maxAdjustmentSets applies only to the DAG witness backends and does not truncate ID."
+          }] : [])
+        ],
+        nextActions: [{ id: identified ? "estimate_identified_kernel" : "review_identification_failure", priority: identified ? "medium" : "high", action: nextAction, reason: identified ? "Identification provides a formula, not a validated numerical estimate." : "The complete ID failure criterion is relative to the supplied semi-Markovian graph." }]
+      }),
+      assumptions: [
+        backendSummaryAssumption,
+        "All explicit nodes are observed; bidirected edges represent latent common causes in an acyclic semi-Markovian causal model.",
+        "The observational law has adequate support for the probabilities and ratios used in the formula."
+      ],
+      limitations: backendLimitations,
+      caveats: [
+        identified
+          ? "A symbolic identification result does not validate the causal graph, positivity, or any estimator."
+          : "Non-identifiability is relative to the supplied semi-Markovian graph; the failure witness is a recursive ID subproblem, not an extracted pair of C-forests."
+      ]
+    };
+  }
   const agent = createTaskAgent("identifyEffect", {
     ...graphConfiguration(backendGraphShape),
     queryShape: "singleton-treatment-singleton-outcome",

@@ -24,9 +24,9 @@ describe("@kanaries/causal facade", () => {
     expect(matrix.columns).toBe(2);
     expect(typeof identifyEffect).toBe("function");
     expect(typeof anm).toBe("function");
-    expect(listIdentificationBackends()).toEqual(["dag-first-mvp", "dag-backdoor-only"]);
-    expect(listIdentificationBackendDescriptors()).toHaveLength(2);
-    expect(listIdentificationBackendsForGraphKind("dag")).toEqual(["dag-first-mvp", "dag-backdoor-only"]);
+    expect(listIdentificationBackends()).toEqual(["dag-first-mvp", "dag-backdoor-only", "id"]);
+    expect(listIdentificationBackendDescriptors()).toHaveLength(3);
+    expect(listIdentificationBackendsForGraphKind("dag")).toEqual(["dag-first-mvp", "dag-backdoor-only", "id"]);
     expect(getIdentificationBackendDescriptor("dag-first-mvp").label).toBe("DAG-First MVP");
     expect(getIdentificationBackendDescriptor("dag-backdoor-only").label).toBe("DAG Backdoor Only");
     expect(typeof runIdentificationBackend).toBe("function");

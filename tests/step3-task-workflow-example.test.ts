@@ -27,6 +27,11 @@ describe("step3 task workflow example", () => {
       {
         id: "dag-backdoor-only",
         defaultForAuto: false
+      },
+      {
+        id: "id",
+        defaultForAuto: true,
+        defaultForGraphKinds: ["admg"]
       }
     ]);
     expect(result.identified.method).toBe("backdoor");
@@ -40,7 +45,7 @@ describe("step3 task workflow example", () => {
   it("keeps backend guidance visible through the example surface", () => {
     const result = runStep3TaskWorkflowExample();
 
-    expect(result.identificationBackends.filter((entry) => entry.defaultForAuto)).toEqual([
+    expect(result.identificationBackends.filter((entry) => entry.defaultForGraphKinds.includes("dag"))).toEqual([
       expect.objectContaining({
         id: "dag-first-mvp",
         supportedMethods: expect.arrayContaining(["backdoor", "frontdoor", "zero-effect"])
