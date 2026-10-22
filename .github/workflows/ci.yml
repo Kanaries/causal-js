@@ -38,6 +38,29 @@ jobs:
       - name: Integration tests
         run: pnpm test:integration
 
+  python-estimation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8.6.12
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: tests/python/requirements.txt
+      - name: Install JavaScript dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install optional estimation backend
+        run: python -m pip install -r tests/python/requirements.txt
+      - name: Independent Python estimation acceptance
+        run: CAUSAL_JS_PYTHON="$(which python)" pnpm test:python
+
   external-regression:
     runs-on: ubuntu-latest
 

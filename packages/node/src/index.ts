@@ -28,6 +28,15 @@ export * from "@causal-js/tasks";
 export * from "./adapters/pc-worker";
 export * from "./worker-bridge";
 export * from "./workers/pc-worker-entry";
+export { createStatsPaiAdapter, estimateEffect } from "./python/adapter";
+export { describeEstimationMethod, listEstimationMethods, ESTIMATION_METHODS, STATSPAI_SUPPORTED_VERSION } from "./python/methods";
+export { PythonAdapterError } from "./python/transport";
+export { listEstimationValidationEvidence } from "./python/validation-evidence";
+export type {
+  EstimationMethod, EstimationData, EstimationDesign, DmlPlrInput, CsDidInput, Iv2slsInput,
+  SharpRdInput, EstimateEffectInput, EstimateEffectResult, StatsPaiAdapterOptions,
+  EstimationExecutionOptions, StatsPaiBackendInfo, EstimationConfidenceInterval
+} from "./python/types";
 
 export interface NodeRuntimeInfo {
   name: "node";

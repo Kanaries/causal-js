@@ -16,6 +16,6 @@ export default defineConfig({
   },
   test: {
     include: ["packages/*/src/**/*.test.ts", "tests/**/*.test.ts"],
-    exclude: ["tests/**/*.integration.test.ts"]
+    exclude: ["tests/**/*.integration.test.ts", "**/*.python.test.ts"]
   }
 });

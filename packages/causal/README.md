@@ -117,6 +117,19 @@ import { detectNodeRuntimeCapabilities } from "@kanaries/causal/node";
 console.log(detectNodeRuntimeCapabilities());
 ```
 
+The Node entry point also exports the experimental optional Python estimation
+adapter: `createStatsPaiAdapter({ pythonExecutable }).estimateEffect(input)`.
+Provision StatsPAI **1.39.5** separately; import and method introspection do not
+start Python. `listEstimationMethods()` and `describeEstimationMethod(id)` expose
+the four curated paths: `dml-plr`, `cs-did`, `iv-2sls`, and `rd-sharp`.
+
+Results include the precise estimand, estimate, standard error, 95% interval,
+method diagnostics, resolved design, data hash, dependency versions and the
+shared `agent` evidence envelope. This does not automatically choose an
+estimator from a graph. See `docs/tasks/python-estimation.md` and
+`examples/python-estimation.ts` in the repository for configuration boundaries,
+installation and independent acceptance instructions.
+
 Browser runtime facade:
 
 ```ts

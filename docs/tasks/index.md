@@ -6,6 +6,11 @@ The experimental [complete ID backend](id-identification.md) additionally
 supports observed ADMGs, including bows. It shares `identifyEffect` and the Agent
 result contract; `identifyById` exposes joint treatment/outcome queries.
 
+The optional [Python estimation adapter](python-estimation.md) provides four
+experimental numerical estimation paths from `@kanaries/causal/node`. Its
+`estimateEffect` result uses the shared Agent envelope and a method-specific
+design; it does not require a graph and does not infer an estimator from ID output.
+
 ## Recommended Order
 
 1. `discoverGraph(...)`
@@ -108,7 +113,8 @@ and `resolveDagForTasks()` for the explicit bridge.
 - when you need conditional-effect IDC or counterfactual identification
 - when your input is a PAG/MAG or selection diagram requiring a different identification procedure
 - when you need permutation-based falsification or multiple-testing corrected graph validation
-- when you need an estimator layer rather than identification-only output
+- when you need automatic estimator construction from an identification formula;
+  explicit curated estimation is available separately through the Node adapter
 
 ## What This Layer Does Not Prove
 

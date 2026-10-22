@@ -63,6 +63,15 @@ Node-oriented facade:
 - file-system-backed utilities
 - native, WASM, or heavy numerical integrations when appropriate
 
+The optional StatsPAI estimation adapter belongs here. It embeds a fixed Python
+bridge in the Node bundle, launches an explicitly selected interpreter without a
+shell, and exchanges bounded versioned JSON over standard I/O. The portable
+core, discovery and tasks packages do not import the process bridge. Each call
+records the resolved statistical design, data hash, backend/dependency versions,
+diagnostics and configuration-specific validation evidence. There is no import-time
+Python execution, automatic package installation, arbitrary callable dispatch or
+implicit graph-to-estimator selection. See [Python estimation](tasks/python-estimation.md).
+
 ### `@causal-js/web`
 
 Browser-oriented facade:

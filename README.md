@@ -49,13 +49,22 @@ Use these entry points based on the job you are trying to do:
 - `identifyById(...)`: run complete ID directly for disjoint treatment and outcome sets.
 - `falsifyGraph(...)`: run DAG sanity checks plus implied conditional independence validation against observed data.
 - `stabilityAnalysis(...)`: bootstrap an existing discovery configuration and summarize robustness.
+- `createStatsPaiAdapter(...).estimateEffect(...)` from `@kanaries/causal/node`: explicitly select a curated Python-backed PLR, CS-DiD, 2SLS or sharp-RD estimator.
 
 The experimental `id` backend supports ADMG bows, recursive kernel expressions,
 and explicit non-identifiability witnesses. `auto` keeps the existing DAG-first
 backend for DAGs and selects ID for ADMGs. See [complete ID](docs/tasks/id-identification.md)
 and the [typed example](examples/id-identification.ts). PAG/MAG identification,
-conditional-effect IDC, counterfactuals, permutation falsification, and estimator
-construction remain outside the current surface.
+conditional-effect IDC, counterfactuals and permutation falsification remain
+outside the current surface.
+
+The experimental [Python estimation adapter](docs/tasks/python-estimation.md)
+adds four deliberately restricted numerical estimation paths through an optional
+StatsPAI 1.39.5 environment. It is available only from the Node entry point and
+starts Python only when called. It preserves each method's estimand, inference,
+diagnostics, data/design provenance and configuration-scoped evidence. Selecting
+an estimator and its causal assumptions is explicit; graph identification does
+not automatically construct an estimator. See the [typed example](examples/python-estimation.ts).
 
 For Agent integrations, use `describeAlgorithm()` and `describeTask()` to inspect
 method assumptions, input schemas, recovery guidance, and cost. All six task

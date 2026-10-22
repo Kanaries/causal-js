@@ -1,0 +1,20 @@
+import path from "node:path";
+
+import { defineConfig } from "vitest/config";
+
+export default defineConfig({
+  resolve: {
+    alias: {
+      "@causal-js/core": path.resolve(__dirname, "packages/core/src/index.ts"),
+      "@causal-js/discovery": path.resolve(__dirname, "packages/discovery/src/index.ts"),
+      "@causal-js/kernel": path.resolve(__dirname, "packages/kernel/src/index.ts"),
+      "@causal-js/tasks": path.resolve(__dirname, "packages/tasks/src/index.ts")
+    }
+  },
+  test: {
+    include: ["tests/**/*.python.test.ts"],
+    testTimeout: 60_000,
+    hookTimeout: 60_000,
+    fileParallelism: false
+  }
+});

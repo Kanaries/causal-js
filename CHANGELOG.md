@@ -4,6 +4,13 @@
 
 ### Added
 
+- Experimental Node-only StatsPAI 1.39.5 Python adapter for curated linear
+  DML-PLR, balanced-panel CS-DiD, HC1 2SLS and fixed-bandwidth sharp RD.
+  Includes versioned JSON transport, cancellation and process limits, explicit
+  estimands, method metadata, design/data provenance and configuration evidence.
+- Independent NumPy/SciPy point-estimate and inference acceptance for the four
+  estimation paths, with a separate pinned Python CI job. Portable imports and
+  ordinary JavaScript tests do not require Python.
 - Agent method metadata, shared task diagnostics, effective configuration
   provenance, and output-specific validation evidence.
 - ADMG bows with separate directed/bidirected queries, removal, metadata,

@@ -1,5 +1,25 @@
 # Roadmap
 
+## StatsPAI integration milestones
+
+- **P0 complete:** Agent method metadata, shared diagnostics/provenance and
+  configuration/output-scoped validation evidence.
+- **P1 complete:** ADMG bows, scoped expression AST and complete ID recursion.
+- **P2 implemented (experimental):** Optional Node-only StatsPAI 1.39.5 adapter
+  for linear DML-PLR, balanced-panel CS-DiD without covariates, single-endogenous
+  2SLS and fixed-bandwidth native sharp RD. A versioned JSON subprocess protocol,
+  explicit method selection, structured failures and independent numerical
+  acceptance define the initial boundary. See [Python estimation](tasks/python-estimation.md).
+- **P2 follow-on gates:** Broaden learners, repeated cross-fitting, covariate
+  adjustment, weights/clusters, weak-IV confidence sets or bandwidth selection
+  only with dedicated contracts and independent evidence. External OOF prediction
+  exchange and graph-driven estimator selection remain separate work.
+- **P3 deferred:** Counterfactual identification, complex forests and targeted
+  Rust/WASM acceleration, guided by concrete usage.
+
+The implementation phases below describe the earlier discovery foundation;
+their numbers are separate from these integration priorities.
+
 ## Phase 0: workspace bootstrap
 
 - initialize `pnpm` workspace
