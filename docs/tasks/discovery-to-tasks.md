@@ -2,11 +2,10 @@
 
 The discovery algorithms mostly return equivalence classes, not DAGs: `pc`,
 `ges`, `grasp`, and `exactSearch` produce CPDAGs (some edges undirected), and
-`fci` produces a PAG. The four graph-analysis tasks (`findAdjustmentSets`,
-`identifyEffect`, `falsifyGraph`, `stabilityAnalysis` consumers) accept only
-fully directed DAGs, so the workflow has a seam in the middle.
-
-`resolveDagForTasks()` closes that seam explicitly.
+`fci` produces a PAG. For DAG adjustment and witness-based identification, orient unresolved edges using
+domain knowledge or explicitly choose a consistent extension with
+`resolveDagForTasks()`. Findings from one extension are conditional on that choice.
+For an already specified observed ADMG use the [complete ID backend](id-identification.md).
 
 ## Example
 

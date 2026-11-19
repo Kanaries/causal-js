@@ -68,7 +68,7 @@ describe("rcd ground-truth recovery", () => {
         expect(ancestorSet.has(parent), `parent ${parent} of ${node} in ancestors`).toBe(true);
       }
     }
-  });
+  }, 30000);
 });
 
 describe("coordinatePatternSearch", () => {

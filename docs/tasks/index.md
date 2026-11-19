@@ -18,9 +18,9 @@ design; it does not require a graph and does not infer an estimator from ID outp
 3. `falsifyGraph(...)`
 4. `stabilityAnalysis(...)`
 
-See [end-to-end-workflow.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/end-to-end-workflow.md) for the current minimal public workflow example.
-See [backend-selection.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/backend-selection.md) for production backend selection guidance.
-See [operational-readiness.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/operational-readiness.md) for release checks and evidence boundaries.
+See [end-to-end-workflow.md](end-to-end-workflow.md) for the current minimal public workflow example.
+See [backend-selection.md](backend-selection.md) for production backend selection guidance.
+See [operational-readiness.md](operational-readiness.md) for release checks and evidence boundaries.
 
 ## Minimal End-To-End Example
 
@@ -100,12 +100,12 @@ console.log(stability.edgeFrequency);
 - stability is a bootstrap wrapper, not a self-compatibility framework
 - falsification and stability now reject invalid input contracts such as duplicate observed-node mappings or out-of-range bootstrap thresholds
 
-See [result-contract.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/result-contract.md) for the stable field-level result contract.
+See [result-contract.md](result-contract.md) for the stable field-level result contract.
 For method introspection, structured diagnostics, and configuration-level
 evidence, see the [Agent contract](agent-contract.md).
 
 Discovery equivalence-class graphs need explicit resolution before DAG tasks; see
-[discovery-to-tasks.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/discovery-to-tasks.md)
+[discovery-to-tasks.md](discovery-to-tasks.md)
 and `resolveDagForTasks()` for the explicit bridge.
 
 ## When Not To Use This Layer

@@ -31,6 +31,17 @@ yarn add @kanaries/causal
 bun add @kanaries/causal
 ```
 
+## Known-effect example
+
+With Node 20+ and the [pinned Python environment](https://github.com/Kanaries/causal-js/blob/main/docs/tasks/python-estimation.md),
+run the example included in the installed package:
+
+```sh
+CAUSAL_JS_PYTHON=.venv/bin/python node node_modules/@kanaries/causal/examples/known-effect.mjs
+```
+
+See the [0.3.0 migration notes](https://github.com/Kanaries/causal-js/blob/main/CHANGELOG.md#upgrading-from-021).
+
 ## Quick start
 
 Choose the smallest public surface that matches your use case:

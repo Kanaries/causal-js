@@ -1,6 +1,6 @@
 {
   "name": "@kanaries/causal",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -8,45 +8,81 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     },
     "./node": {
-      "types": "./dist/node/index.d.ts",
-      "import": "./dist/node/index.js",
-      "require": "./dist/node/index.cjs"
+      "import": {
+        "types": "./dist/node/index.d.ts",
+        "default": "./dist/node/index.js"
+      },
+      "require": {
+        "types": "./dist/node/index.d.cts",
+        "default": "./dist/node/index.cjs"
+      }
     },
     "./web": {
-      "types": "./dist/web/index.d.ts",
-      "import": "./dist/web/index.js",
-      "require": "./dist/web/index.cjs"
+      "import": {
+        "types": "./dist/web/index.d.ts",
+        "default": "./dist/web/index.js"
+      },
+      "require": {
+        "types": "./dist/web/index.d.cts",
+        "default": "./dist/web/index.cjs"
+      }
     },
     "./node/workers/pc-worker-entry": {
-      "types": "./dist/node/workers/pc-worker-entry.d.ts",
-      "import": "./dist/node/workers/pc-worker-entry.js",
-      "require": "./dist/node/workers/pc-worker-entry.cjs"
+      "import": {
+        "types": "./dist/node/workers/pc-worker-entry.d.ts",
+        "default": "./dist/node/workers/pc-worker-entry.js"
+      },
+      "require": {
+        "types": "./dist/node/workers/pc-worker-entry.d.cts",
+        "default": "./dist/node/workers/pc-worker-entry.cjs"
+      }
     },
     "./node/workers/pc-worker-runtime": {
-      "types": "./dist/node/workers/pc-worker-runtime.d.ts",
-      "import": "./dist/node/workers/pc-worker-runtime.js",
-      "require": "./dist/node/workers/pc-worker-runtime.cjs"
+      "import": {
+        "types": "./dist/node/workers/pc-worker-runtime.d.ts",
+        "default": "./dist/node/workers/pc-worker-runtime.js"
+      },
+      "require": {
+        "types": "./dist/node/workers/pc-worker-runtime.d.cts",
+        "default": "./dist/node/workers/pc-worker-runtime.cjs"
+      }
     },
     "./web/workers/pc-worker-entry": {
-      "types": "./dist/web/workers/pc-worker-entry.d.ts",
-      "import": "./dist/web/workers/pc-worker-entry.js",
-      "require": "./dist/web/workers/pc-worker-entry.cjs"
+      "import": {
+        "types": "./dist/web/workers/pc-worker-entry.d.ts",
+        "default": "./dist/web/workers/pc-worker-entry.js"
+      },
+      "require": {
+        "types": "./dist/web/workers/pc-worker-entry.d.cts",
+        "default": "./dist/web/workers/pc-worker-entry.cjs"
+      }
     },
     "./web/workers/pc-worker-runtime": {
-      "types": "./dist/web/workers/pc-worker-runtime.d.ts",
-      "import": "./dist/web/workers/pc-worker-runtime.js",
-      "require": "./dist/web/workers/pc-worker-runtime.cjs"
+      "import": {
+        "types": "./dist/web/workers/pc-worker-runtime.d.ts",
+        "default": "./dist/web/workers/pc-worker-runtime.js"
+      },
+      "require": {
+        "types": "./dist/web/workers/pc-worker-runtime.d.cts",
+        "default": "./dist/web/workers/pc-worker-runtime.cjs"
+      }
     }
   },
   "files": [
     "dist",
     "LICENSE",
-    "README.md"
+    "README.md",
+    "examples/known-effect.mjs"
   ],
   "sideEffects": false,
   "publishConfig": {

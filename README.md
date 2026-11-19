@@ -27,6 +27,8 @@ yarn add @kanaries/causal
 bun add @kanaries/causal
 ```
 
+See the [0.3.0 migration notes](CHANGELOG.md#upgrading-from-021) and the [runnable discovery-to-estimation example](docs/tasks/end-to-end-workflow.md).
+
 ## Quick Start
 
 If you are new to the library, start with one of these three paths:
@@ -154,8 +156,8 @@ The practical meaning is:
 - `PC`, `CD_NOD`, `GES`, `ExactSearch`, `GIN`, `GRaSP`, and `RCD` are now covered by the current V1 parity and comparison baseline
 - `CAM_UV` is accepted for V1 on the current comparison suite, while still keeping a portable smoother instead of a literal `pygam.LinearGAM` dependency
 
-See [v1-status.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/v1-status.md) for the exact boundaries.
-See [external-regression.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/testing/external-regression.md) for the heavy regression workflow.
+See [v1-status.md](docs/v1-status.md) for the exact boundaries.
+See [external-regression.md](docs/testing/external-regression.md) for the heavy regression workflow.
 
 ## Stable Entry Points
 
@@ -165,9 +167,7 @@ Current public package roles:
 - `@kanaries/causal/node`: Node-oriented runtime facade
 - `@kanaries/causal/web`: browser-oriented runtime facade
 
-At the current v1 stage, the Node and Web public facades intentionally overlap
-a lot. Runtime-specific divergence is currently limited to capability probes,
-execution planning, and worker-adapter scaffolding.
+The Node entry point also exposes the optional StatsPAI estimation adapter.
 
 ## Task Workflow At A Glance
 
@@ -179,9 +179,9 @@ The recommended DAG-first order is:
 4. `falsifyGraph(...)`
 5. `stabilityAnalysis(...)`
 
-See [tasks/index.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/index.md) for the full task surface.
+See [tasks/index.md](docs/tasks/index.md) for the full task surface.
 See [tasks/backend-selection.md](docs/tasks/backend-selection.md) before choosing `auto`, `dag-first-mvp`, `dag-backdoor-only`, or `id`.
-See [tasks/operational-readiness.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/operational-readiness.md) for release checks and interpretation boundaries.
+See [tasks/operational-readiness.md](docs/tasks/operational-readiness.md) for release checks and interpretation boundaries.
 
 ## Usage
 
@@ -371,10 +371,10 @@ Current Step 3 task-workflow boundary:
 - `stabilityAnalysis()` is a bootstrap robustness wrapper, not a graph correctness proof
 - invalid falsification and stability input contracts now fail explicitly instead of producing silent fallback behavior
 
-See [tasks/index.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/index.md) and [tasks/step3-checklist.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/step3-checklist.md) for the current accepted task-workflow surface.
-See [tasks/result-contract.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/result-contract.md) for the stable result-object contract.
-See [tasks/end-to-end-workflow.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/end-to-end-workflow.md) and [examples/step3-task-workflow.ts](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/examples/step3-task-workflow.ts) for the current minimal public workflow example.
-See [tasks/backend-selection.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/backend-selection.md) and [tasks/operational-readiness.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/operational-readiness.md) for backend pinning guidance, validation commands, and evidence boundaries.
+See [tasks/index.md](docs/tasks/index.md) and [tasks/step3-checklist.md](docs/tasks/step3-checklist.md) for the current accepted task-workflow surface.
+See [tasks/result-contract.md](docs/tasks/result-contract.md) for the stable result-object contract.
+See [tasks/end-to-end-workflow.md](docs/tasks/end-to-end-workflow.md) and [examples/step3-task-workflow.ts](examples/step3-task-workflow.ts) for the current minimal public workflow example.
+See [tasks/backend-selection.md](docs/tasks/backend-selection.md) and [tasks/operational-readiness.md](docs/tasks/operational-readiness.md) for backend pinning guidance, validation commands, and evidence boundaries.
 
 ### Runtime Facades
 
@@ -446,9 +446,9 @@ The accepted V1 surface is intentionally narrower than full `causal-learn`:
 
 See:
 
-- [architecture.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/architecture.md)
-- [roadmap.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/roadmap.md)
-- [v1-status.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/v1-status.md)
+- [architecture.md](docs/architecture.md)
+- [roadmap.md](docs/roadmap.md)
+- [v1-status.md](docs/v1-status.md)
 
 ## Developer Workflow
 

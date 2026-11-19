@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 
 ### Added
 
@@ -34,6 +34,20 @@
 - Falsification with no conclusive CI tests returns `null`; invalid p-values
   remain inconclusive. Invalid search limits are rejected; positive infinity
   retains its unbounded semantics. CALM is reported unavailable.
+
+### Upgrading from 0.2.1
+
+- Update typed task-result fixtures to include the method's `agent` metadata.
+  Handle the `id` backend and quotient nodes in exhaustive expression visitors.
+- Select defaults by graph kind with `defaultForGraphKinds`. For an ADMG bow,
+  specify the edge type and use GraphShape serialization to retain both edges.
+- Handle an inconclusive falsification verdict explicitly before branching on
+  the boolean. Review diagnostics for invalid conditional-independence results.
+- Gaussian BIC now respects changes of measurement units, and BDeu priors
+  support small graphs. Recompute stored discovery outputs that relied on
+  previous scores.
+- Existing JavaScript workflows can upgrade independently of Python. For
+  numerical estimation, follow the [StatsPAI setup](docs/tasks/python-estimation.md).
 
 ## 0.2.1
 

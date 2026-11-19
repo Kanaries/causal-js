@@ -29,6 +29,9 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Typecheck public examples
+        run: pnpm typecheck:examples
+
       - name: Build
         run: pnpm build
 
@@ -61,6 +64,21 @@ jobs:
       - name: Independent Python estimation acceptance
         run: CAUSAL_JS_PYTHON="$(which python)" pnpm test:python
 
+      - name: Run the known-effect example from the npm tarball
+        run: |
+          consumer=$(mktemp -d)
+          cd packages/causal
+          archive=$(npm pack --silent --pack-destination "$consumer")
+          cd "$consumer"
+          npm install --offline --ignore-scripts --no-audit --no-fund "./$archive"
+          CAUSAL_JS_PYTHON="$(which python)" node node_modules/@kanaries/causal/examples/known-effect.mjs > result.json
+          node <<'NODE'
+          const assert = require("node:assert/strict");
+          const result = require("./result.json");
+          assert.deepEqual(result.adjustmentSet, ["Z"]);
+          assert.ok(Math.abs(result.estimate - result.knownEffect) < 0.1);
+          NODE
+
   external-regression:
     runs-on: ubuntu-latest
 
@@ -89,5 +107,5 @@ jobs:
       - name: External regression tests
         env:
           CAUSAL_JS_SOURCE_ROOT: ${{ github.workspace }}
-        run: pnpm test -- --testTimeout=30000
+        run: pnpm exec vitest run --no-file-parallelism --testTimeout=30000
         working-directory: causal-parity

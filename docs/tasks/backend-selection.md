@@ -6,7 +6,7 @@ workflows and the experimental complete ID backend on observed DAGs/ADMGs.
 ## Available Backends
 
 - `auto`: chooses `dag-first-mvp` for DAGs and the experimental `id` backend for ADMGs.
-- `dag-first-mvp`: the broadest currently supported DAG-first backend. It evaluates zero-effect, backdoor, and core frontdoor witnesses.
+- `dag-first-mvp`: the default DAG witness backend. It evaluates zero-effect, backdoor, and core frontdoor witnesses.
 - `dag-backdoor-only`: the conservative DAG-first backend. It evaluates zero-effect and backdoor only, and returns a structured non-identifiable result instead of attempting frontdoor.
 - `id`: complete unconditional ID on observed DAGs/ADMGs, including bows. It returns an observational expression or a recursive non-identifiability witness.
 

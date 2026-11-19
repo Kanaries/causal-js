@@ -92,8 +92,8 @@ It is now:
 4. only widen parity or runtime coverage when it materially changes confidence
 5. avoid reopening dependency-level reimplementation work unless it becomes a product requirement
 
-See [v1-status.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/v1-status.md) for the current algorithm-by-algorithm status matrix.
-See [tasks/index.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/index.md) for the current Step 3 workflow boundary.
+See [v1-status.md](v1-status.md) for the current algorithm-by-algorithm status matrix.
+See [tasks/index.md](tasks/index.md) for the current Step 3 workflow boundary.
 
 ## Suggested Near-Term Work Items
 

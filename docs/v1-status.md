@@ -1,40 +1,20 @@
-# V1 Status
+# Release status for 0.3.0
 
-Last updated: 2026-03-16
+| Area | Supported scope |
+| --- | --- |
+| Discovery | PC, GES and the methods in the comparison matrix below. Later additions include FCI, missing-value PC, conditional KCI and pairwise ANM. The default ANM regressor is a portable approximation. |
+| Structural tasks | Production-scope DAG-first adjustment, witness-based identification, falsification and bootstrap stability. |
+| Complete ID | Experimental unconditional identification on observed DAGs and ADMGs, including bows. The result includes an expression or a failure witness. |
+| Estimation | Experimental Node-only StatsPAI 1.39.5 adapter for four explicit designs. Numerical acceptance covers specific configurations and outputs. |
+| Runtime | Root and Web entry points support portable analysis. Python estimation is available through the Node entry point. |
 
-This document records the current `causal-js` baseline.
-The current V1 baseline has completed the acceptance run:
+See the [identification guide](tasks/id-identification.md), [estimation guide](tasks/python-estimation.md),
+[external regression instructions](testing/external-regression.md) and [release notes](../CHANGELOG.md).
 
-- `pnpm typecheck`
-- `pnpm build`
-- `pnpm test`
-- `pnpm test:integration`
-- external regression suite in `Kanaries/causal-parity`
+## Historical V1 discovery acceptance (March 2026)
 
-This document is intentionally strict about the difference between:
-
-- behavior locked by the external regression suite
-- runnable portable baselines that are still approximation-heavy
-
-## Current Summary
-
-The first requested algorithm wave is now runnable in `causal-js`:
-
-- `PC`
-- `CD_NOD`
-- `GES`
-- `ExactSearch`
-- `GIN`
-- `GRaSP`
-- `CAM_UV`
-- `RCD`
-
-The first requested algorithm wave is accepted for the current V1 target.
-The correct next step is no longer to prove the baseline exists. The correct
-next step is to preserve the accepted boundary and avoid widening scope
-accidentally.
-
-The heavy regression workflow now lives in [testing/external-regression.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/testing/external-regression.md).
+The matrix and scope notes below record the original acceptance run. Later releases
+added MVPC and conditional KCI. See the [changelog](../CHANGELOG.md) for subsequent coverage.
 
 ## Status Matrix
 

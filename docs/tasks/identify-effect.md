@@ -28,28 +28,17 @@ console.log(result.estimandSpec?.expressionTree);
 console.log(result.diagnostics);
 ```
 
-## Assumptions
+## Choosing a backend
 
-- input graph is a directed acyclic graph
-- treatment and outcome are singleton nodes
-- this MVP only searches for backdoor and core frontdoor witnesses
+With `auto`, DAGs use the DAG-first witness rules shown above. ADMGs use
+the experimental complete ID backend. To select complete ID on an observed DAG,
+pass `backend: "id"`. Model implicit common causes as bidirected ADMG edges.
+Resolve equivalence-class inputs using defensible assumptions before identification.
 
-## Current Limits
+`identifyEffect` accepts one treatment and one outcome. Use `identifyById` for
+disjoint variable sets. The result describes the intervention symbolically.
+A witness-rule failure is scoped to those rules. A complete ID failure supplies
+a non-identifiability witness for the supplied graph. Estimation requires a
+separate design and data.
 
-- no full ID algorithm
-- no full symbolic algebra engine or automatic estimator derivation
-- no multi-treatment or conditional interventional queries
-
-## When Not To Use This API
-
-- when you need full ID coverage over more general graphs
-- when you need a production estimator instead of an identification result
-- when you need multi-treatment, multi-outcome, or counterfactual queries
-
-## Backend Selection Guidance
-
-`identifyEffect()` now accepts `backend?: "auto" | "dag-first-mvp" | "dag-backdoor-only"`. In this step, `auto` resolves through the registry to `dag-first-mvp`. `dag-first-mvp` searches zero-effect, backdoor, and core frontdoor witnesses. `dag-backdoor-only` is the conservative variant that searches zero-effect and backdoor only, and returns a structured non-identifiable result instead of attempting frontdoor. See [backend-selection.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/backend-selection.md) for the production backend-selection guidance.
-
-## Notes
-
-The registry is introspectable through `listIdentificationBackends()`, `listIdentificationBackendsForGraphKind()`, `supportsIdentificationBackendGraphKind()`, `listIdentificationBackendDescriptors()`, and `getIdentificationBackendDescriptor()`, which expose the currently available backend ids, graph-kind compatibility, supported methods, and default auto-selection rule. Explicit backend selection now rejects incompatible graph kinds instead of silently falling back. `estimand` remains a compatibility-oriented rendered description. `estimandSpec` is the stable structured contract for supported identifiable cases and now includes `expressionTree` for a symbolic representation of the current estimand equation, alongside the rendered query, expression, bound variables, and factorization pieces. `diagnostics` records which backend checks succeeded or failed before the final result was chosen. `identifiable: false` in this step means "not identifiable under the selected backend's implemented rules", not "globally impossible under every richer graph formalism". `identifiable: true` also does not imply that any estimator is automatically valid or well-conditioned.
+See [backend selection](backend-selection.md) and [complete ID](id-identification.md).
