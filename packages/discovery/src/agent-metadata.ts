@@ -44,7 +44,7 @@ const fciProperties = {
 } satisfies OptionProperties<FciOptions>;
 const gesProperties = {
   data, score, nodeLabels,
-  maxParents: { type: "integer", minimum: 0, description: "Parent-count search bound; implementation default is data.columns / 2." }
+  maxParents: { type: "integer", minimum: 0, description: "Maximum size of the parent set after an insertion. When omitted, GES prunes targets with more than data.columns / 2 directed parents." }
 } satisfies OptionProperties<GesOptions>;
 const exactProperties = {
   data, score, nodeLabels,

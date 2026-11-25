@@ -1,4 +1,4 @@
-import { GRAPH_KIND, type ValidationConfiguration } from "@causal-js/core";
+import { GRAPH_KIND, NODE_TYPE, type GraphNode, type ValidationConfiguration } from "@causal-js/core";
 import { describeAlgorithm } from "@causal-js/discovery";
 
 import { createTaskAgent, defaultDiscoveryGraphField, discoveryConfiguration } from "./agent-result";
@@ -57,9 +57,7 @@ export function stabilityAnalysis(options: StabilityAnalysisOptions): StabilityA
   const selectedGraphFields = new Set<"graph" | "cpdag" | "dag">();
   let graphArtifactFallbacks = 0;
   let graphKindFallbacks = 0;
-  const nodeIds = options.discovery.options.nodeLabels
-    ? [...options.discovery.options.nodeLabels]
-    : Array.from({ length: baseData.columns }, (_, index) => `X${index + 1}`);
+  let consensusNodes: GraphNode[] = [];
 
   for (let iteration = 0; iteration < bootstrapSamples; iteration += 1) {
     const sampledRowIndices = sampleRowIndices(baseData.rows, sampleSize, replace, random);
@@ -87,19 +85,24 @@ export function stabilityAnalysis(options: StabilityAnalysisOptions): StabilityA
       graphKind: discovered.graph.kind ?? GRAPH_KIND.generic
     });
 
+    const nodes = discovered.graph.nodes;
+    if (iteration === 0) consensusNodes = nodes;
+    const types = new Map(nodes.map(node => [node.id, node.nodeType ?? NODE_TYPE.measured]));
+    if (consensusNodes.length !== types.size ||
+        consensusNodes.some(node => types.get(node.id) !== (node.nodeType ?? NODE_TYPE.measured))) {
+      throw new Error("Cannot aggregate bootstrap graphs with different node identities or types.");
+    }
+    const pairNodeIds = [...types.keys()].sort();
     const edgesByPair = new Map<string, ReturnType<typeof canonicalizeEdge>>();
     for (const edge of discovered.graph.edges) {
-      const canonical = canonicalizeEdge(edge.node1, edge.node2, edge);
-      if (!canonical) {
-        continue;
-      }
+      const canonical = canonicalizeEdge(edge);
       edgesByPair.set(edgeKey(canonical.node1, canonical.node2), canonical);
     }
 
-    for (let left = 0; left < nodeIds.length; left += 1) {
-      for (let right = left + 1; right < nodeIds.length; right += 1) {
-        const node1 = nodeIds[left]!;
-        const node2 = nodeIds[right]!;
+    for (let left = 0; left < pairNodeIds.length; left += 1) {
+      for (let right = left + 1; right < pairNodeIds.length; right += 1) {
+        const node1 = pairNodeIds[left]!;
+        const node2 = pairNodeIds[right]!;
         const key = edgeKey(node1, node2);
         const canonicalEdge = edgesByPair.get(key) ?? absentEdgeRecord(node1, node2);
         const pairCount = pairCounts.get(key) ?? { node1, node2, adjacent: 0, absent: 0 };
@@ -260,7 +263,7 @@ export function stabilityAnalysis(options: StabilityAnalysisOptions): StabilityA
     runSummaries,
     edgeFrequency,
     orientationStability,
-    consensusGraph: consensusEdges.length === 0 ? null : createGenericGraph(nodeIds, consensusEdges),
+    consensusGraph: consensusEdges.length === 0 ? null : createGenericGraph(consensusNodes, consensusEdges),
     assumptions: [
       "Uses bootstrap-style row resampling around the existing discovery implementation.",
       ...(describeAlgorithm(options.discovery.algorithm)?.agent.assumptions ?? [])

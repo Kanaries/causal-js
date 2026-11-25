@@ -119,3 +119,11 @@ describe("MvFisherZTest", () => {
     expect(test.test(2, 3, [0])).toBeCloseTo(0.013035198196845066, 6);
   });
 });
+
+it.each(["addUndirectedEdge", "addBidirectedEdge", "addPartiallyOrientedEdge"] as const)(
+  "rejects graphs containing %s before running a DAG oracle", add => {
+    const graph = CausalGraph.fromNodeIds(["A", "B"]);
+    graph[add]("A", "B");
+    expect(() => new DSeparationTest(graph)).toThrow(/directed graph/);
+  }
+);

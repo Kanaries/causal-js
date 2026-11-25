@@ -104,7 +104,7 @@ function deriveLocalMarkovImplications(
   const seen = new Set<string>();
   return implications.filter((implication) => {
     const orderedPair = implication.x < implication.y ? [implication.x, implication.y] : [implication.y, implication.x];
-    const key = `${orderedPair[0]}::${orderedPair[1]}|${[...implication.conditioningSet].sort().join(",")}`;
+    const key = JSON.stringify([orderedPair, [...implication.conditioningSet].sort()]);
     if (seen.has(key)) {
       return false;
     }

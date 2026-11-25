@@ -4,10 +4,10 @@ const entry = {
   index: "src/index.ts",
   "node/index": "src/node/index.ts",
   "node/workers/pc-worker-entry": "src/node/workers/pc-worker-entry.ts",
-  "node/workers/pc-worker-runtime": "src/node/workers/pc-worker-runtime.ts",
+  "node/workers/pc-worker-runtime": "../node/src/workers/pc-worker-runtime.ts",
   "web/index": "src/web/index.ts",
   "web/workers/pc-worker-entry": "src/web/workers/pc-worker-entry.ts",
-  "web/workers/pc-worker-runtime": "src/web/workers/pc-worker-runtime.ts"
+  "web/workers/pc-worker-runtime": "../web/src/workers/pc-worker-runtime.ts"
 };
 
 export default defineConfig([

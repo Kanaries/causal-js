@@ -178,3 +178,15 @@ describe("BackgroundKnowledge", () => {
     expect(restored.isForbidden("C", "C")).toBe(true);
   });
 });
+
+it("keeps delimiter-bearing required and forbidden rules distinct through transport", () => {
+  const rules = new BackgroundKnowledge().addRequired("A->B", "C").addForbidden("A", "B->C");
+  for (const bk of [rules, BackgroundKnowledge.fromShape(structuredClone(rules.toShape()))]) {
+    expect(bk.isRequired("A->B", "C")).toBe(true);
+    expect(bk.isRequired("A", "B->C")).toBe(false);
+    expect(bk.isForbidden("A", "B->C")).toBe(true);
+    expect(bk.isForbidden("A->B", "C")).toBe(false);
+    expect(bk.toShape().required).toEqual([{ from: "A->B", to: "C" }]);
+    expect(bk.toShape().forbidden).toEqual([{ from: "A", to: "B->C" }]);
+  }
+});

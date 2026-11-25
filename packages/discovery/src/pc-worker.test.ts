@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { BackgroundKnowledge } from "@causal-js/core";
+
 import { executeSerializablePcTask } from "./pc-worker";
 
 describe("executeSerializablePcTask", () => {
@@ -26,4 +28,17 @@ describe("executeSerializablePcTask", () => {
     expect(result.graph.nodes).toHaveLength(3);
     expect(result.maxDepth).toBeGreaterThanOrEqual(0);
   });
+});
+
+it("orients a worker edge using a serialized rule whose source contains an arrow", () => {
+  const knowledge = new BackgroundKnowledge().addRequired("A->B", "C");
+  const result = executeSerializablePcTask({
+    data: Array.from({ length: 64 }, (_, i) => [i % 2, i % 2]),
+    nodeLabels: ["A->B", "C"],
+    ciTest: { kind: "chi-square" },
+    backgroundKnowledge: structuredClone(knowledge.toShape())
+  });
+  expect(result.graph.edges).toEqual([
+    { node1: "A->B", node2: "C", endpoint1: "tail", endpoint2: "arrow" }
+  ]);
 });

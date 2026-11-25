@@ -1,4 +1,4 @@
-import { CausalGraph } from "./graph";
+import { CausalGraph, classifyEdge, GRAPH_EDGE_PATTERN } from "./graph";
 import {
   KciConditionalTest,
   KciUnconditionalTest,
@@ -571,7 +571,8 @@ export class DSeparationTest implements ConditionalIndependenceTest {
     private readonly dag: CausalGraph,
     observedNodeIds?: readonly string[]
   ) {
-    if (dag.hasDirectedCycle()) {
+    if (dag.getEdges().some(edge => classifyEdge(edge.endpoint1, edge.endpoint2) !== GRAPH_EDGE_PATTERN.directed)
+        || dag.hasDirectedCycle()) {
       throw new Error("DSeparationTest requires an acyclic directed graph.");
     }
 

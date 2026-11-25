@@ -277,3 +277,19 @@ describe("adjustment criterion soundness", () => {
     }
   });
 });
+
+it.each(["latent", "selection", "measured"] as const)("checks observability of a %s confounder", (nodeType) => {
+  const graph = new CausalGraph([{ id: "U", nodeType }, { id: "X" }, { id: "Y" }], { kind: "dag" });
+  graph.addDirectedEdge("U", "X").addDirectedEdge("U", "Y").addDirectedEdge("X", "Y");
+  const query = { graph: graph.toShape(), treatment: "X", outcome: "Y" };
+  const measured = nodeType === "measured";
+  const checked = isAdjustmentSet({ ...query, adjustmentSet: ["U"] });
+  expect(checked.candidate.blockedInBackdoorGraph).toBe(true);
+  expect(checked.valid).toBe(measured);
+  expect(findAdjustmentSets(query).candidateSets.map(set => set.variables)).toEqual(measured ? [["U"]] : []);
+  expect(checked.agent.nextActions[0]?.id).toBe(measured ? "select_adjustment_estimator" : "find_alternative_adjustment");
+  if (!measured) {
+    expect(checked.agent.diagnostics.find(entry => entry.code === "adjustment_set_validity")?.details)
+      .toMatchObject({ unmeasuredCovariates: [{ id: "U", nodeType }] });
+  }
+});

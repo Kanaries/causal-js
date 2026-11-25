@@ -8,15 +8,11 @@ export interface BackgroundKnowledgeShape {
 }
 
 function makeEdgeKey(from: string, to: string): string {
-  return `${from}->${to}`;
+  return JSON.stringify([from, to]);
 }
 
 function parseEdgeKey(key: string): { from: string; to: string } {
-  const [from, to] = key.split("->");
-  if (!from || !to) {
-    throw new Error(`Invalid edge key: ${key}`);
-  }
-
+  const [from, to] = JSON.parse(key) as [string, string];
   return { from, to };
 }
 

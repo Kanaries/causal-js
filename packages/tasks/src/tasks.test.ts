@@ -1286,3 +1286,11 @@ describe("task-oriented workflow", () => {
     expectStabilityContract(stability);
   });
 });
+
+it("retains all six distinct marginal constraints for delimiter-bearing node IDs", () => {
+  const labels = ["A", "B::C", "A::B", "C"];
+  const graph = CausalGraph.fromNodeIds(labels, { kind: "dag" });
+  const constraints = falsifyGraph({ graph: graph.toShape() }).impliedConditionalIndependences;
+  const expected = labels.flatMap((x, i) => labels.slice(i + 1).map(y => [x, y].sort()));
+  expect(constraints.map(({ x, y }) => [x, y].sort()).sort()).toEqual(expected.sort());
+});

@@ -777,7 +777,6 @@ export function skeletonDiscovery(options: PcOptions): PcSkeletonResult {
         }
 
         const candidateNeighbors = neighborsOfX.filter((neighbor) => neighbor !== y);
-        const collectedSepsets: number[][] = [];
 
         for (const conditioningSet of combinations(candidateNeighbors, depth)) {
           testsRun += 1;
@@ -786,24 +785,15 @@ export function skeletonDiscovery(options: PcOptions): PcSkeletonResult {
             continue;
           }
 
+          appendSepset(sepsets, x, y, conditioningSet);
+          appendSepset(sepsets, y, x, conditioningSet);
           if (!stable) {
             removeEdge(graph, x, y);
-            appendSepset(sepsets, x, y, conditioningSet);
-            appendSepset(sepsets, y, x, conditioningSet);
             break;
           }
 
           pendingRemoval.add(pairKey(x, y));
           pendingRemoval.add(pairKey(y, x));
-          collectedSepsets.push(sortConditioningSet(conditioningSet));
-        }
-
-        if (pendingRemoval.has(pairKey(x, y))) {
-          const sepsetEntries = collectedSepsets.length > 0 ? collectedSepsets : [[]];
-          for (const conditioningSet of sepsetEntries) {
-            appendSepset(sepsets, x, y, conditioningSet);
-            appendSepset(sepsets, y, x, conditioningSet);
-          }
         }
       }
     }

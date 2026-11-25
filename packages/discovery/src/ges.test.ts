@@ -162,3 +162,15 @@ describe("ges", () => {
     ]);
   });
 });
+
+it.each([0, 1])("enforces an explicit maxParents of %i on inserted parent sets", (maxParents) => {
+  const parentCounts: number[] = [];
+  const score = { name: "prefer-edges", score: (_node: number, parents: readonly number[]) => {
+    parentCounts.push(parents.length);
+    return -parents.length;
+  } };
+  const data = new DenseMatrix([[1, 2, 3]]);
+  const result = ges({ data, score, maxParents });
+  expect(result.dag.edges).toHaveLength(maxParents === 0 ? 0 : 2);
+  expect(Math.max(...parentCounts)).toBeLessThanOrEqual(maxParents);
+});

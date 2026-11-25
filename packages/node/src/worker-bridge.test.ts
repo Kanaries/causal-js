@@ -1,3 +1,4 @@
+import { Worker } from "node:worker_threads";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -89,3 +90,9 @@ describe("createNodeWorkerBridge", () => {
     });
   });
 });
+
+it.each([0, 2])("rejects a task if its worker exits with code %i before replying", async code => {
+  const worker = new Worker(`process.exit(${code})`, { eval: true });
+  const bridge = createNodeWorkerBridge(() => worker);
+  await expect(bridge.runTask("pc", {})).rejects.toThrow(new RegExp(`exited.*${code}`));
+}, 3000);

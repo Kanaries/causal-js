@@ -147,11 +147,13 @@ function scoreDeltaForAdd(
   from: number,
   to: number,
   subset: readonly number[],
-  score: GesOptions["score"]
+  score: GesOptions["score"],
+  maxParents: number
 ): number {
   const na = getNaIndices(cpdag, from, to);
   const parents = unionSorted(getCpdagParentIndices(cpdag, to), na, subset);
   const newParents = unionSorted(parents, [from]);
+  if (newParents.length > maxParents) return Infinity;
   return score.score(to, newParents) - score.score(to, parents);
 }
 
@@ -239,7 +241,10 @@ export function ges(options: GesOptions): GesResult {
   const variableCount = options.data.columns;
   const nodeLabels = createNodeLabels(variableCount, options.nodeLabels);
   let cpdag = new CausalGraph(nodeLabels.map((id) => ({ id })));
-  const maxParents = options.maxParents ?? variableCount / 2;
+  const maxParents = options.maxParents ?? Infinity;
+  if (options.maxParents !== undefined && (!Number.isInteger(maxParents) || maxParents < 0)) {
+    throw new Error("GES maxParents must be a nonnegative integer.");
+  }
 
   let currentScore = totalScore(CausalGraph.fromShape(pdagToDag(cpdag).toShape()), variableCount, options.score);
   let forwardSteps = 0;
@@ -257,7 +262,8 @@ export function ges(options: GesOptions): GesResult {
           continue;
         }
 
-        if (getCpdagParentIndices(cpdag, to).length > maxParents) {
+        // Keep the historical directed-parent pruning heuristic for unconstrained GES.
+        if (options.maxParents === undefined && getCpdagParentIndices(cpdag, to).length > variableCount / 2) {
           continue;
         }
 
@@ -270,7 +276,7 @@ export function ges(options: GesOptions): GesResult {
             continue;
           }
 
-          const delta = scoreDeltaForAdd(cpdag, from, to, subset, options.score);
+          const delta = scoreDeltaForAdd(cpdag, from, to, subset, options.score, maxParents);
           if (delta < bestDelta) {
             bestDelta = delta;
             bestMove = { type: "add", from, to, subset };

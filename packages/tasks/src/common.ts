@@ -13,6 +13,7 @@ import {
   type ConditionalIndependenceTest,
   type EdgeDescriptor,
   type GraphKind,
+  type GraphNode,
   type GraphShape,
   type NumericMatrix
 } from "@causal-js/core";
@@ -687,13 +688,10 @@ function extractScoreOptions(score: unknown): object | undefined {
 }
 
 export function edgeKey(node1: string, node2: string): string {
-  return node1 < node2 ? `${node1}::${node2}` : `${node2}::${node1}`;
+  return JSON.stringify(node1 < node2 ? [node1, node2] : [node2, node1]);
 }
 
-export function canonicalizeEdge(node1: string, node2: string, edge?: EdgeDescriptor): EdgeDescriptor | null {
-  if (!edge) {
-    return null;
-  }
+export function canonicalizeEdge(edge: EdgeDescriptor): EdgeDescriptor {
   if (edge.node1 <= edge.node2) {
     return edge;
   }
@@ -706,8 +704,8 @@ export function canonicalizeEdge(node1: string, node2: string, edge?: EdgeDescri
   };
 }
 
-export function createGenericGraph(nodeIds: readonly string[], edges: readonly EdgeDescriptor[]): GraphShape {
-  const graph = CausalGraph.fromNodeIds(nodeIds, { kind: GRAPH_KIND.generic });
+export function createGenericGraph(nodes: readonly GraphNode[], edges: readonly EdgeDescriptor[]): GraphShape {
+  const graph = new CausalGraph(nodes, { kind: GRAPH_KIND.generic });
   for (const edge of edges) {
     graph.setEdge(edge.node1, edge.node2, edge.endpoint1, edge.endpoint2, edge.metadata);
   }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { BackgroundKnowledge, ChiSquareTest, DenseMatrix, FisherZTest, KciTest } from "@causal-js/core";
+import { BackgroundKnowledge, CausalGraph, DSeparationTest, ChiSquareTest, DenseMatrix, FisherZTest, KciTest } from "@causal-js/core";
 
 import { pc, skeletonDiscovery } from "./pc";
 import type { PcResult } from "./contracts";
@@ -263,4 +263,17 @@ describe("pc with kernel CI test", () => {
     const kci = pc({ data, ciTest: new KciTest(data) });
     expect(skeleton(kci)).toEqual(["X1-X2", "X2-X3"]);
   }, 30_000);
+});
+
+it("only reports CI-supported separators after a reverse scan finds none", () => {
+  const dag = CausalGraph.fromNodeIds(["A", "B", "C", "D"], { kind: "dag" });
+  dag.addDirectedEdge("B", "A").addDirectedEdge("C", "A").addDirectedEdge("C", "B").addDirectedEdge("D", "B");
+  const ciTest = new DSeparationTest(dag);
+  const result = skeletonDiscovery({ data: new DenseMatrix([[0, 0, 0, 0]]), ciTest, stable: true });
+  for (const [x, y] of [[0, 3], [3, 0]]) {
+    expect(result.sepsets.find(pair => pair.x === x && pair.y === y)?.conditioningSets).toEqual([[1, 2]]);
+  }
+  for (const { x, y, conditioningSets } of result.sepsets) {
+    for (const set of conditioningSets) expect(ciTest.test(x, y, set)).toBe(1);
+  }
 });

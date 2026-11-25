@@ -175,12 +175,20 @@ export function isAdjustmentSet(options: IsAdjustmentSetOptions): IsAdjustmentSe
   assertSingletonNodeQuery(options.treatment, options.outcome);
   assertDagLike(graph);
 
-  const candidate = evaluateAdjustmentSet(
+  const structural = evaluateAdjustmentSet(
     options.graph,
     options.treatment,
     options.outcome,
     options.adjustmentSet
   );
+
+  const measured = new Set(getMeasuredNodeIds(graph));
+  const unmeasuredCovariates = structural.variables.filter(id => !measured.has(id)).map(id => {
+    const node = graph.getNode(id);
+    if (!node?.nodeType) throw new Error(`Unknown adjustment covariate: ${id}`);
+    return { id, nodeType: node.nodeType };
+  });
+  const candidate = { ...structural, valid: structural.valid && unmeasuredCovariates.length === 0 };
 
   return {
     task: "isAdjustmentSet",
@@ -191,7 +199,7 @@ export function isAdjustmentSet(options: IsAdjustmentSetOptions): IsAdjustmentSe
       adjustmentSetSize: candidate.variables.length
     }, ["valid"], {
       backend: "dag-backdoor",
-      diagnostics: [{ code: "adjustment_set_validity", status: candidate.valid ? "passed" : "failed", severity: candidate.valid ? "info" : "warning", message: candidate.valid ? "The supplied set satisfies the implemented DAG adjustment criterion." : "The supplied set does not satisfy the implemented DAG adjustment criterion.", details: { forbiddenNodesInSet: candidate.forbiddenDescendants, blockedInBackdoorGraph: candidate.blockedInBackdoorGraph } }],
+      diagnostics: [{ code: "adjustment_set_validity", status: candidate.valid ? "passed" : "failed", severity: candidate.valid ? "info" : "warning", message: unmeasuredCovariates.length > 0 ? "Adjustment requires measured covariates." : candidate.valid ? "The supplied set satisfies the implemented DAG adjustment criterion." : "The supplied set does not satisfy the implemented DAG adjustment criterion.", details: { unmeasuredCovariates, forbiddenNodesInSet: candidate.forbiddenDescendants, blockedInBackdoorGraph: candidate.blockedInBackdoorGraph } }],
       nextActions: [{ id: candidate.valid ? "select_adjustment_estimator" : "find_alternative_adjustment", priority: candidate.valid ? "medium" : "high", action: candidate.valid ? "Choose an estimator and check overlap for the proposed covariates." : "Search for alternative valid adjustment sets.", reason: "A graph criterion checks structural admissibility, not finite-sample estimator performance.", ...(candidate.valid ? {} : { suggestedTask: "findAdjustmentSets" }) }]
     }),
     graph: graph.toShape(),
