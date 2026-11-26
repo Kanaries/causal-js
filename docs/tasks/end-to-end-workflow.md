@@ -2,9 +2,24 @@
 
 This page points to the current minimal public Step 3 workflow example for the production-scope DAG-first workflow.
 
-## Example File
+## Reproduce a known effect
 
-See [examples/step3-task-workflow.ts](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/examples/step3-task-workflow.ts).
+Build the package with `pnpm build` and provision the interpreter using the
+[Python estimation instructions](python-estimation.md). From the repository root run:
+
+```sh
+CAUSAL_JS_PYTHON=.venv/bin/python node packages/causal/examples/known-effect.mjs
+```
+
+The [example](../../packages/causal/examples/known-effect.mjs) simulates baseline
+Z, treatment X and outcome Y with a constant effect of 0.6. PC initially finds
+three undirected edges. The known measurement order Z, X, Y orients them.
+The resulting graph identifies Z as the adjustment set. Linear DML then uses
+the same rows to estimate the treatment coefficient and its 95% interval.
+
+## Structural workflow example
+
+See [examples/step3-task-workflow.ts](../../examples/step3-task-workflow.ts).
 
 The example walks through the current recommended sequence:
 
@@ -14,8 +29,8 @@ The example walks through the current recommended sequence:
 4. `falsifyGraph(...)`
 5. `stabilityAnalysis(...)`
 
-See [backend-selection.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/backend-selection.md) before pinning an identification backend.
-See [operational-readiness.md](/Users/observedobserver/Documents/GitHub/causal-lab/causal-js/docs/tasks/operational-readiness.md) before treating this workflow as release-ready.
+See [backend-selection.md](backend-selection.md) before pinning an identification backend.
+See [operational-readiness.md](operational-readiness.md) before treating this workflow as release-ready.
 
 ## What The Example Assumes
 
