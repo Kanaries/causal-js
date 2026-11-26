@@ -38,6 +38,12 @@ jobs:
       - name: Integration tests
         run: pnpm test:integration
 
+      - name: Verify freshly compiled Rust/WASM kernel
+        run: |
+          rm -f packages/kernel/src/artifacts/causal_kernel_dag_dsep.wasm
+          pnpm --filter @causal-js/kernel build:wasm
+          pnpm exec vitest run packages/kernel/src
+
   python-estimation:
     runs-on: ubuntu-latest
     steps:
