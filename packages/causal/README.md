@@ -2,50 +2,40 @@
 
 [![npm version](https://img.shields.io/npm/v/%40kanaries%2Fcausal)](https://www.npmjs.com/package/@kanaries/causal)
 [![npm downloads](https://img.shields.io/npm/dm/%40kanaries%2Fcausal)](https://www.npmjs.com/package/@kanaries/causal)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](https://github.com/Kanaries/causal-js/blob/main/LICENSE)
 
-Public npm facade for `causal-js`.
+**Causal discovery and causal inference for JavaScript and TypeScript — running natively in Node.js and the browser.**
 
-The current task workflow exposed through this package is production-scope within an explicitly bounded, DAG-first contract.
+`@kanaries/causal` is the public npm package for [`causal-js`](https://github.com/Kanaries/causal-js). It provides 11 portable causal discovery algorithms (`PC`, `MVPC`, `FCI`, `CD-NOD`, `GES`, `ExactSearch`, `GRaSP`, `GIN`, `CAM-UV`, `RCD`, `ANM`), DAG/ADMG causal graph primitives, symbolic effect identification (backdoor, frontdoor, and experimental complete ID), graph falsification, bootstrap stability analysis, and structured AI-agent diagnostics — with **zero Python required** for the portable core.
 
-Primary entry points:
+---
 
-- `@kanaries/causal`
-- `@kanaries/causal/node`
-- `@kanaries/causal/web`
+## Install
 
-Install:
+Requires **Node.js 20+** or a modern browser / ESM bundler.
 
 ```bash
 npm install @kanaries/causal
+# or: pnpm add @kanaries/causal | yarn add @kanaries/causal | bun add @kanaries/causal
 ```
 
-```bash
-pnpm add @kanaries/causal
-```
+Upgrading from `0.2.x`? See the [0.3.0 migration notes](https://github.com/Kanaries/causal-js/blob/main/CHANGELOG.md#upgrading-from-021).
 
-```bash
-yarn add @kanaries/causal
-```
+---
 
-```bash
-bun add @kanaries/causal
-```
+## Entry Points
 
-## Quick start
+| Entry Point | Target Runtime | Purpose |
+| --- | --- | --- |
+| `@kanaries/causal` | Node.js & Browser | Portable causal discovery algorithms, graph IR (DAG/CPDAG/PAG/ADMG), CI tests, scores, DAG-first task workflow, complete ID, and AI-agent metadata |
+| `@kanaries/causal/node` | Node.js 20+ | Portable surface + Node runtime capability & worker helpers + optional StatsPAI Python estimation adapter |
+| `@kanaries/causal/web` | Modern Browsers | Portable surface + Browser/WebWorker/WebGPU capability & worker helpers |
 
-Choose the smallest public surface that matches your use case:
+---
 
-- `@kanaries/causal`: discovery algorithms, graph primitives, CI tests, and the DAG-first task workflow
-- `@kanaries/causal/node`: Node-specific runtime helpers
-- `@kanaries/causal/web`: browser-specific runtime helpers
+## Quick Start
 
-## Choose the right entry point
-
-- use the root facade when you want portable discovery or DAG-first workflow APIs
-- use the Node facade when you need runtime capability checks or worker helpers for Node.js
-- use the Web facade when you need browser capability checks or worker helpers for web runtimes
-
-Example:
+### Causal Discovery (`PC`)
 
 ```ts
 import { DenseMatrix, FisherZTest, pc } from "@kanaries/causal";
@@ -59,10 +49,11 @@ const result = pc({
   ucRule: 0,
   ucPriority: 2
 });
+
+console.log(result.graph);
 ```
 
-Pairwise additive-noise direction evidence is also portable across the root,
-Node, and Web entry points:
+### Pairwise Direction Evidence (`ANM`)
 
 ```ts
 import { anm } from "@kanaries/causal";
@@ -70,73 +61,85 @@ import { anm } from "@kanaries/causal";
 const { forwardPValue, backwardPValue } = anm(x, y);
 ```
 
-`anm` deliberately leaves orientation thresholds to the caller. Its default
-deterministic RBF regression is browser-safe and injectable, but is an
-intentional approximation rather than exact sklearn Gaussian-process parity.
+> `anm` is deterministic and browser-safe, leaves orientation thresholds to the caller, and uses an injectable RBF kernel regression approximation by default.
 
-Task workflow example:
+### Causal Effect Identification (DAG & ADMG)
 
 ```ts
-import { CausalGraph, GRAPH_KIND, identifyEffect } from "@kanaries/causal";
+import { CausalGraph, GRAPH_KIND, findAdjustmentSets, identifyEffect } from "@kanaries/causal";
 
 const graph = CausalGraph.fromNodeIds(["X", "Y", "Z"], { kind: GRAPH_KIND.dag });
 graph.addDirectedEdge("Z", "X");
 graph.addDirectedEdge("Z", "Y");
 graph.addDirectedEdge("X", "Y");
 
-const result = identifyEffect({
+const adjustment = findAdjustmentSets({
   graph: graph.toShape(),
   treatment: "X",
   outcome: "Y"
 });
 
-console.log(result.estimandSpec?.expression);
-console.log(result.backend);
+const identified = identifyEffect({
+  graph: graph.toShape(),
+  treatment: "X",
+  outcome: "Y"
+});
+
+console.log(adjustment.candidateSets);       // [["Z"]]
+console.log(identified.estimandSpec?.expression);
+console.log(identified.backend);
 ```
 
-Complete ID is also available with `backend: "id"` on an observed DAG or ADMG.
-ADMGs support bows (a directed and a bidirected edge on the same pair); `auto`
-selects ID for ADMG inputs. `identifyById()` accepts joint treatment/outcome
-sets. Results include an expression AST with quotients or an explicit recursive
-failure witness. See `docs/tasks/id-identification.md` and
-`examples/id-identification.ts` for scope, support assumptions, and validation.
+Experimental **complete ID** is also available via `backend: "id"` (or `backend: "auto"` on `GRAPH_KIND.admg` graphs with bidirected edges and bows), and `identifyById()` supports joint treatment/outcome sets. See [Complete ID & ADMG Bows](https://github.com/Kanaries/causal-js/blob/main/docs/tasks/id-identification.md) and [`examples/id-identification.ts`](https://github.com/Kanaries/causal-js/blob/main/examples/id-identification.ts).
 
-For Agent integrations, `describeAlgorithm()` and `describeTask()` expose method
-metadata and JavaScript input schemas. All six task APIs add `result.agent` with
-structured diagnostics, degradations, next actions, configuration provenance,
-and evidence coverage by output. `getDiagnosticSummary()` keeps checks that did
-not run separate from checks that passed. Evidence coverage refers to existing
-test artifacts and does not validate new data or causal assumptions. See
-`docs/tasks/agent-contract.md` and `examples/agent-metadata.ts` in the repository.
+---
 
-Node runtime facade:
+## Included Capabilities
+
+- **Discovery Algorithms**: `pc`, `mvpc`, `fci`, `cdnod`, `ges`, `exactSearch`, `grasp`, `gin`, `camuv`, `rcd`, `anm`
+- **CI Tests & Scores**: `FisherZTest`, `ChiSquareTest`, `GSquareTest`, `KciTest`, `MvFisherZTest`, `DSeparationTest`, `GaussianBicScore`, `BDeuScore`
+- **Structural Task Workflow** (production-scope, DAG-first): `discoverGraph`, `resolveDagForTasks`, `findAdjustmentSets`, `isAdjustmentSet`, `identifyEffect`, `falsifyGraph`, `stabilityAnalysis`
+- **AI Agent Introspection & Diagnostics**: `describeAlgorithm()`, `describeTask()`, `getDiagnosticSummary()`, and the JSON-compatible `result.agent` envelope on all six task APIs ([Agent Contract](https://github.com/Kanaries/causal-js/blob/main/docs/tasks/agent-contract.md))
+
+---
+
+## Runtime Helpers & Optional Python Estimation
+
+### Node & Browser Runtime Detection
 
 ```ts
 import { detectNodeRuntimeCapabilities } from "@kanaries/causal/node";
-
 console.log(detectNodeRuntimeCapabilities());
 ```
 
-The Node entry point also exports the experimental optional Python estimation
-adapter: `createStatsPaiAdapter({ pythonExecutable }).estimateEffect(input)`.
-Provision StatsPAI **1.39.5** separately; import and method introspection do not
-start Python. `listEstimationMethods()` and `describeEstimationMethod(id)` expose
-the four curated paths: `dml-plr`, `cs-did`, `iv-2sls`, and `rd-sharp`.
-
-Results include the precise estimand, estimate, standard error, 95% interval,
-method diagnostics, resolved design, data hash, dependency versions and the
-shared `agent` evidence envelope. This does not automatically choose an
-estimator from a graph. See `docs/tasks/python-estimation.md` and
-`examples/python-estimation.ts` in the repository for configuration boundaries,
-installation and independent acceptance instructions.
-
-Browser runtime facade:
-
 ```ts
 import { detectWebRuntimeCapabilities } from "@kanaries/causal/web";
-
 console.log(detectWebRuntimeCapabilities());
 ```
 
-See the workspace root README, `docs/tasks/end-to-end-workflow.md`, and `docs/v1-status.md` for the current V1 scope,
-accepted parity boundaries, task-workflow example path, and release validation commands. For Step 3 workflow usage, also see `docs/tasks/backend-selection.md` and `docs/tasks/operational-readiness.md`.
+### Optional Curated Estimation (`@kanaries/causal/node`)
+
+`@kanaries/causal/node` exposes an experimental, optional StatsPAI (`1.39.5`) Python adapter via `createStatsPaiAdapter({ pythonExecutable }).estimateEffect(input)` for four explicit designs: `dml-plr`, `cs-did`, `iv-2sls`, and `rd-sharp`. Importing the package or calling `listEstimationMethods()` / `describeEstimationMethod(id)` never starts Python.
+
+With Node 20+ and the [pinned Python environment](https://github.com/Kanaries/causal-js/blob/main/docs/tasks/python-estimation.md), you can run the bundled end-to-end example:
+
+```sh
+CAUSAL_JS_PYTHON=.venv/bin/python node node_modules/@kanaries/causal/examples/known-effect.mjs
+```
+
+---
+
+## Scope & Documentation
+
+The task workflow exposed through this package is **production-scope** within an explicitly bounded, **DAG-first** contract. Complete ID (`backend: "id"`) and the Node-only StatsPAI estimation adapter are explicitly marked experimental.
+
+- [GitHub Repository & Full README](https://github.com/Kanaries/causal-js)
+- [End-to-End Workflow](https://github.com/Kanaries/causal-js/blob/main/docs/tasks/end-to-end-workflow.md)
+- [Backend Selection Guide](https://github.com/Kanaries/causal-js/blob/main/docs/tasks/backend-selection.md)
+- [Release Status & Parity Boundaries](https://github.com/Kanaries/causal-js/blob/main/docs/v1-status.md)
+- [Operational Readiness](https://github.com/Kanaries/causal-js/blob/main/docs/tasks/operational-readiness.md)
+- [Optional Python Estimation](https://github.com/Kanaries/causal-js/blob/main/docs/tasks/python-estimation.md)
+
+## License
+
+[Apache-2.0](https://github.com/Kanaries/causal-js/blob/main/LICENSE)
